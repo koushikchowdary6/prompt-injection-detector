@@ -13,7 +13,9 @@ complementary layers:
    generalizes to phrasings the rules don't literally match.
 
 `score()` blends the two so you get the rules' precision on known attacks plus
-the model's recall on novel wordings.
+the model's recall on novel wordings. A confident heuristic match also retains
+a score floor, preventing the ML blend from accidentally suppressing an
+obvious attack signal.
 
 This is the applied-security companion to my
 [SigmaForge](https://github.com/koushikchowdary6/sigmaforge) research on whether
@@ -55,9 +57,20 @@ catch the obvious attacks the model might miss.
 python -m pytest tests/ -v
 ```
 
-7 tests cover the heuristics, dataset balance, and that the trained model
-flags injections (including a novel jailbreak persona) while passing benign
-prompts.
+The regression suite covers:
+
+- high-signal instruction override and system-prompt exfiltration patterns;
+- benign input that must not trigger the heuristic layer;
+- increasing suspicion when multiple independent attack patterns appear;
+- balanced example-data assumptions used during training;
+- trained-model behavior on both injection and benign prompts;
+- a novel jailbreak-persona example not copied from the training set;
+- score bounds and the heuristic score-floor invariant; and
+- configurable decision thresholds used by downstream applications.
+
+These tests focus on **security semantics**, not just whether the Python code
+executes: changes to score blending or detection thresholds should fail CI if
+they silently weaken an intended guardrail property.
 
 ## ⚠️ Honesty about scope
 
