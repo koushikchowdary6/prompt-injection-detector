@@ -15,6 +15,7 @@ input -- and it connects to my SigmaForge research on adversarial context.
 """
 from __future__ import annotations
 
+import math
 import re
 
 import numpy as np
@@ -51,6 +52,8 @@ def heuristic_score(text: str) -> float:
 
 class PromptInjectionDetector:
     def __init__(self, ml_weight: float = 0.5):
+        if not math.isfinite(ml_weight) or not 0.0 <= ml_weight <= 1.0:
+            raise ValueError("ml_weight must be a finite number between 0 and 1")
         self.ml_weight = ml_weight
         self.model: Pipeline | None = None
 
@@ -76,4 +79,6 @@ class PromptInjectionDetector:
         return max(blended, h * 0.85)
 
     def is_injection(self, text: str, threshold: float = 0.5) -> bool:
+        if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+            raise ValueError("threshold must be a finite number between 0 and 1")
         return self.score(text) >= threshold
