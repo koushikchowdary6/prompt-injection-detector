@@ -8,7 +8,7 @@ Two complementary layers:
   2. ML -- a TF-IDF + LogisticRegression model trained on labeled examples,
      which generalizes to phrasings the rules don't literally match.
 
-`score()` returns a probability by blending the two, so you get the rules'
+`score()` returns a risk score (not a calibrated probability) by blending the two, so you get the rules'
 precision on known attacks plus the model's recall on novel phrasings. This
 is exactly the kind of guardrail an LLM application puts in front of user
 input -- and it connects to my SigmaForge research on adversarial context.
@@ -25,8 +25,8 @@ from sklearn.pipeline import Pipeline
 
 # Transparent high-signal patterns. Each is a known injection tell.
 HEURISTIC_PATTERNS = [
-    r"ignore (all |the )?(previous|prior|above)",
-    r"disregard (the |all )?(above|previous|prior)",
+    r"\bignore\s+(?:(?:all|the)\s+)?(?:previous|prior|above)\b",
+    r"\bdisregard\s+(?:(?:the|all)\s+)?(?:above|previous|prior)\b",
     r"forget (everything|all|what you)",
     r"(reveal|print|repeat|show).{0,30}(system|initial|hidden).{0,20}(prompt|instructions?|message|rules)",
     r"do anything now|developer mode|jailbreak|\bDAN\b.{0,24}\b(mode|persona|assistant|jailbreak)\b",
@@ -38,7 +38,7 @@ HEURISTIC_PATTERNS = [
     r"do not follow.{0,20}(policy|guidelines|openai|anthropic)",
     r"what (were|are) the.{0,20}instructions (given|you)",
 ]
-_COMPILED = [re.compile(p, re.IGNORECASE) for p in HEURISTIC_PATTERNS]
+_COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERNS]
 
 
 def heuristic_score(text: str) -> float:
