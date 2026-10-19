@@ -27,14 +27,14 @@ from sklearn.pipeline import Pipeline
 HEURISTIC_PATTERNS = [
     r"\bignore\s+(?:(?:all|the)\s+)?(?:previous|prior|above)\b",
     r"\bdisregard\s+(?:(?:the|all)\s+)?(?:above|previous|prior)\b",
-    r"forget (everything|all|what you)",
+    r"\bforget\s+(?:everything|all|what\s+you)\b",
     r"(reveal|print|repeat|show).{0,30}(system|initial|hidden).{0,20}(prompt|instructions?|message|rules)",
-    r"do anything now|developer mode|jailbreak|\bDAN\b.{0,24}\b(mode|persona|assistant|jailbreak)\b",
-    r"no (restrictions|rules|filter|guidelines|safety)",
+    r"\bdo\s+anything\s+now\b|developer\s+mode|jailbreak|\bDAN\b.{0,24}\b(mode|persona|assistant|jailbreak)\b",
+    r"\bno\s+(?:restrictions|rules|filter|guidelines|safety)\b",
     r"(bypass|override|disable).{0,20}(restrictions?|filters?|policy|guidelines|instructions?|safety)",
     r"pretend you are (a |an )?(different|unrestricted)",
     r"you are now.{0,40}\b(unrestricted|unfiltered|uncensored|developer mode|different assistant|dan)\b",
-    r"end of prompt",
+    r"\bend\s+of\s+prompt\b",
     r"do not follow.{0,20}(policy|guidelines|openai|anthropic)",
     r"what (were|are) the.{0,20}instructions (given|you)",
 ]
