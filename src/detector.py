@@ -73,7 +73,8 @@ class PromptInjectionDetector:
     def score(self, text: str) -> float:
         """Blend heuristic and ML scores. Heuristics can only *raise* suspicion."""
         h = heuristic_score(text)
-        m = self.ml_score(text) if self.model is not None else 0.0
+        # A zero ML weight is an explicit opt-out, including the confidence floor.
+        m = self.ml_score(text) if self.model is not None and self.ml_weight > 0 else 0.0
         blended = self.ml_weight * m + (1 - self.ml_weight) * h
         # Preserve high-confidence signals from either detector against blend dilution.
         return max(blended, h * 0.85, m * 0.85)
