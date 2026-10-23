@@ -8,18 +8,44 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data"))
 
 import numpy as np
-from sklearn.model_selection import StratifiedKFold
+from sklearn.model_selection import StratifiedGroupKFold
 
 import examples
-from detector import PromptInjectionDetector
+from detector import PromptInjectionDetector, normalize_text
+
+
+def grouped_folds(texts, labels, n_splits=5, seed=0):
+    """Keep equivalent prompts in the same fold to prevent train/test leakage.
+
+    Canonicalized duplicates, including case and Unicode variants, can
+    otherwise make a small benchmark look artificially accurate.
+    """
+    if len(texts) != len(labels) or not len(texts):
+        raise ValueError("texts and labels must be non-empty and aligned")
+    groups = [normalize_text(str(t)).casefold().strip() for t in texts]
+    group_labels = {}
+    for group, label in zip(groups, labels):
+        if group in group_labels and group_labels[group] != label:
+            raise ValueError("conflicting labels for equivalent prompts")
+        group_labels[group] = label
+    for label in set(labels):
+        distinct = sum(group_label == label for group_label in group_labels.values())
+        if distinct < n_splits:
+            raise ValueError(
+                f"need at least {n_splits} distinct prompts for class {label}"
+            )
+    splitter = StratifiedGroupKFold(
+        n_splits=n_splits, shuffle=True, random_state=seed
+    )
+    return list(splitter.split(texts, labels, groups=groups))
 
 
 def evaluate(ml_weight: float = 0.5, seed: int = 0):
     texts, labels = examples.load()
     texts, labels = np.array(texts), np.array(labels)
-    skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=seed)
+    folds = grouped_folds(texts, labels, n_splits=5, seed=seed)
     accs, tp, fp, fn = [], 0, 0, 0
-    for tr, te in skf.split(texts, labels):
+    for tr, te in folds:
         det = PromptInjectionDetector(ml_weight=ml_weight)
         det.fit(list(texts[tr]), list(labels[tr]))
         preds = [int(det.is_injection(t)) for t in texts[te]]
