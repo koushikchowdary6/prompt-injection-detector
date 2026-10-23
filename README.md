@@ -14,6 +14,8 @@ complementary layers:
 
 `score()` combines heuristic and classifier signals into a bounded **risk score**, not a calibrated probability. A heuristic match retains a score floor so the ML blend cannot suppress an obvious attack signal. Before training, `score()` still uses heuristic detection; the ML-only `ml_score()` method requires `fit()`.
 
+**Training-data contract:** `fit(texts, labels)` requires aligned, nonempty text and both integer labels: `0` for benign and `1` for injection. Invalid or single-class data is rejected before fitting so `ml_score()` cannot silently interpret the wrong probability column. NumPy integer labels are supported for cross-validation; a failed refit leaves the previous model intact.
+
 This is the applied-security companion to my
 [SigmaForge](https://github.com/koushikchowdary6/sigmaforge) research on whether
 adversarial context can sabotage LLM-generated detection rules — same threat
