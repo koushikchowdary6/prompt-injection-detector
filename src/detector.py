@@ -42,14 +42,17 @@ HEURISTIC_PATTERNS = [
 _COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERNS]
 
 
+def normalize_text(text: str) -> str:
+    """Canonicalize common Unicode obfuscations for both detector layers."""
+    normalized = unicodedata.normalize("NFKC", text)
+    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Cf")
+
+
 def heuristic_score(text: str) -> float:
     """Fraction-based score in [0,1] from how many injection patterns match."""
-    # Unicode format characters (e.g. zero-width spaces) and compatibility
-    # glyphs (e.g. fullwidth letters) can hide otherwise obvious directives.
-    # Normalize only the heuristic input; keep the original for ML inference.
-    normalized = unicodedata.normalize("NFKC", text)
-    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Cf")
-    hits = sum(1 for p in _COMPILED if p.search(normalized))
+    # Both heuristics and ML must see the same normalized input, or an
+    # obfuscated directive can evade the learned layer despite rule matches.
+    hits = sum(1 for p in _COMPILED if p.search(normalize_text(text)))
     if hits == 0:
         return 0.0
     # 1 hit -> 0.7, saturating toward 1.0 with more hits.
@@ -68,13 +71,13 @@ class PromptInjectionDetector:
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)),
             ("clf", LogisticRegression(max_iter=1000, class_weight="balanced")),
         ])
-        self.model.fit(texts, labels)
+        self.model.fit([normalize_text(text) for text in texts], labels)
         return self
 
     def ml_score(self, text: str) -> float:
         if self.model is None:
             raise RuntimeError("call fit() before scoring")
-        return float(self.model.predict_proba([text])[0, 1])
+        return float(self.model.predict_proba([normalize_text(text)])[0, 1])
 
     def score(self, text: str) -> float:
         """Blend heuristic and ML scores. Heuristics can only *raise* suspicion."""
