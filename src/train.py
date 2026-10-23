@@ -44,7 +44,7 @@ def evaluate(ml_weight: float = 0.5, seed: int = 0):
     texts, labels = examples.load()
     texts, labels = np.array(texts), np.array(labels)
     folds = grouped_folds(texts, labels, n_splits=5, seed=seed)
-    accs, tp, fp, fn = [], 0, 0, 0
+    correct, evaluated, tp, fp, fn = 0, 0, 0, 0, 0
     for tr, te in folds:
         det = PromptInjectionDetector(ml_weight=ml_weight)
         det.fit(list(texts[tr]), list(labels[tr]))
@@ -53,10 +53,13 @@ def evaluate(ml_weight: float = 0.5, seed: int = 0):
             tp += p == 1 and y == 1
             fp += p == 1 and y == 0
             fn += p == 0 and y == 1
-        accs.append(np.mean([p == y for p, y in zip(preds, labels[te])]))
+        # Pool out-of-fold predictions: fold sizes can differ under grouped CV.
+        # A mean of fold accuracies would overweight small test folds.
+        correct += sum(p == y for p, y in zip(preds, labels[te]))
+        evaluated += len(te)
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
-    return {"accuracy": float(np.mean(accs)), "precision": precision, "recall": recall}
+    return {"accuracy": correct / evaluated, "precision": precision, "recall": recall}
 
 
 if __name__ == "__main__":
