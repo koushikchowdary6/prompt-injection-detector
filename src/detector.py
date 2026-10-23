@@ -18,6 +18,7 @@ from __future__ import annotations
 import math
 import re
 import unicodedata
+from numbers import Integral
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -67,11 +68,27 @@ class PromptInjectionDetector:
         self.model: Pipeline | None = None
 
     def fit(self, texts: list[str], labels: list[int]) -> "PromptInjectionDetector":
-        self.model = Pipeline([
+        """Fit a binary 0=benign, 1=injection classifier without corrupting an existing model.
+
+        predict_proba()[0, 1] assumes class 1 is the injection label. Reject
+        mislabeled, single-class, or mismatched training data before fitting.
+        """
+        if not texts or len(texts) != len(labels):
+            raise ValueError("training texts and labels must be non-empty and aligned")
+        if any(not isinstance(text, str) or not normalize_text(text).strip()
+               for text in texts):
+            raise ValueError("training texts must be non-empty strings")
+        if any(isinstance(label, bool) or not isinstance(label, Integral)
+               or label not in (0, 1) for label in labels):
+            raise ValueError("training labels must be integers 0 (benign) or 1 (injection)")
+        if set(labels) != {0, 1}:
+            raise ValueError("training data must contain both benign and injection labels")
+        candidate = Pipeline([
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)),
             ("clf", LogisticRegression(max_iter=1000, class_weight="balanced")),
         ])
-        self.model.fit([normalize_text(text) for text in texts], labels)
+        candidate.fit([normalize_text(text) for text in texts], labels)
+        self.model = candidate
         return self
 
     def ml_score(self, text: str) -> float:
