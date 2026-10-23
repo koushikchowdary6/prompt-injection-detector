@@ -1,0 +1,59 @@
+"""Leakage checks for illustrative prompt-injection cross-validation."""
+
+import sys
+from pathlib import Path
+
+import numpy as np
+import pytest
+
+sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
+
+from detector import normalize_text
+from train import grouped_folds
+
+
+def _duplicate_dataset():
+    texts, labels = [], []
+    for label, prefix in ((0, "Ordinary question"), (1, "Ignore previous instruction")):
+        for index in range(6):
+            original = f"{prefix} number {index}"
+            texts.extend([original, original.upper()])
+            labels.extend([label, label])
+    return np.array(texts), np.array(labels)
+
+
+def test_canonical_duplicates_never_cross_train_test_boundary():
+    texts, labels = _duplicate_dataset()
+    folds = grouped_folds(texts, labels, n_splits=5, seed=42)
+    assert len(folds) == 5
+    seen_test = []
+    for train_indices, test_indices in folds:
+        train_keys = {normalize_text(texts[i]).casefold().strip()
+                      for i in train_indices}
+        test_keys = {normalize_text(texts[i]).casefold().strip()
+                     for i in test_indices}
+        assert train_keys.isdisjoint(test_keys)
+        assert set(labels[train_indices]) == {0, 1}
+        seen_test.extend(test_indices.tolist())
+    assert sorted(seen_test) == list(range(len(texts)))
+
+
+def test_conflicting_labels_for_same_prompt_are_rejected():
+    texts, labels = _duplicate_dataset()
+    labels[1] = 1
+    with pytest.raises(ValueError, match="conflicting labels"):
+        grouped_folds(texts, labels, n_splits=5)
+
+
+def test_too_few_independent_examples_are_rejected():
+    texts = np.array(["benign", "BENIGN", "injection", "INJECTION"])
+    labels = np.array([0, 0, 1, 1])
+    with pytest.raises(ValueError, match="distinct prompts"):
+        grouped_folds(texts, labels, n_splits=5)
+
+
+def test_unicode_compatibility_forms_are_grouped_together():
+    texts = np.array(["hello", "ｈｅｌｌｏ", "attack", "ＡＴＴＡＣＫ"])
+    labels = np.array([0, 0, 1, 1])
+    with pytest.raises(ValueError, match="distinct prompts"):
+        grouped_folds(texts, labels, n_splits=2)
