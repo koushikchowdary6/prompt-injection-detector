@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import re
+import unicodedata
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -43,7 +44,12 @@ _COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERN
 
 def heuristic_score(text: str) -> float:
     """Fraction-based score in [0,1] from how many injection patterns match."""
-    hits = sum(1 for p in _COMPILED if p.search(text))
+    # Unicode format characters (e.g. zero-width spaces) and compatibility
+    # glyphs (e.g. fullwidth letters) can hide otherwise obvious directives.
+    # Normalize only the heuristic input; keep the original for ML inference.
+    normalized = unicodedata.normalize("NFKC", text)
+    normalized = "".join(ch for ch in normalized if unicodedata.category(ch) != "Cf")
+    hits = sum(1 for p in _COMPILED if p.search(normalized))
     if hits == 0:
         return 0.0
     # 1 hit -> 0.7, saturating toward 1.0 with more hits.
