@@ -2,12 +2,14 @@
 from __future__ import annotations
 
 import sys
+from numbers import Integral
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data"))
 
 import numpy as np
+from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.model_selection import StratifiedGroupKFold
 
 import examples
@@ -22,10 +24,21 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     """
     if len(texts) != len(labels) or not len(texts):
         raise ValueError("texts and labels must be non-empty and aligned")
-    # TF-IDF treats runs of whitespace as token separators. Group such
-    # near-identical prompts together, including tabs/newlines, so formatting
-    # changes cannot leak the same example into both train and test folds.
-    groups = [" ".join(normalize_text(str(t)).casefold().split()) for t in texts]
+    if not isinstance(n_splits, Integral) or isinstance(n_splits, bool) or n_splits < 2:
+        raise ValueError("n_splits must be an integer of at least 2")
+    if any(isinstance(label, bool) or not isinstance(label, Integral)
+           or label not in (0, 1) for label in labels):
+        raise ValueError("labels must be binary integers 0 or 1")
+    if any(not isinstance(t, str) for t in texts):
+        raise ValueError("texts must contain strings")
+
+    # Group by the same tokenization the TF-IDF classifier actually sees.
+    # Punctuation, case, whitespace and Unicode compatibility differences
+    # otherwise let feature-identical prompts leak across train/test folds.
+    tokenizer = TfidfVectorizer().build_tokenizer()
+    groups = [" ".join(tokenizer(normalize_text(t).casefold())) for t in texts]
+    if any(not group for group in groups):
+        raise ValueError("each prompt must contain at least one TF-IDF token")
     group_labels = {}
     for group, label in zip(groups, labels):
         if group in group_labels and group_labels[group] != label:
