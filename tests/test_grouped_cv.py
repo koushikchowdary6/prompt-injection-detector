@@ -5,6 +5,7 @@ from pathlib import Path
 
 import numpy as np
 import pytest
+from sklearn.feature_extraction.text import TfidfVectorizer
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "src"))
 
@@ -87,7 +88,7 @@ def test_punctuation_variants_never_cross_train_test_boundary():
             labels.extend([label, label])
     texts, labels = np.array(texts), np.array(labels)
     folds = grouped_folds(texts, labels, n_splits=5, seed=42)
-    tokenizer = __import__("sklearn.feature_extraction.text", fromlist=["TfidfVectorizer"]).TfidfVectorizer().build_tokenizer()
+    tokenizer = TfidfVectorizer().build_tokenizer()
 
     def canonical(value):
         return tuple(tokenizer(normalize_text(value).casefold()))
