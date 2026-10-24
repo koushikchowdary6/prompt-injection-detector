@@ -60,12 +60,13 @@ def heuristic_score(text: str) -> float:
     # are themselves a high-signal obfuscation indicator; avoid exponential
     # work on attacker-controlled input. ML normalization stays unchanged.
     normalized = unicodedata.normalize("NFKC", text)
-    pieces = [""]
+    segments = [[]]
     for char in normalized:
         if unicodedata.category(char) == "Cf":
-            pieces.append("")
+            segments.append([])
         else:
-            pieces[-1] += char
+            segments[-1].append(char)
+    pieces = ["".join(chars) for chars in segments]
     format_count = len(pieces) - 1
     if format_count > 8:
         return 0.7
