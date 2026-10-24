@@ -43,10 +43,26 @@ HEURISTIC_PATTERNS = [
 ]
 _COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERNS]
 
+# Guardrail inputs are untrusted. In particular, up to 256 regex variants of
+# a long prompt would otherwise multiply memory use and scanning time.
+MAX_INPUT_CHARS = 100_000
+
+
+def _bounded_nfkc(text: str) -> str:
+    """Reject oversized inputs before and after Unicode compatibility expansion."""
+    if not isinstance(text, str):
+        raise ValueError("input must be a string")
+    if len(text) > MAX_INPUT_CHARS:
+        raise ValueError(f"input exceeds {MAX_INPUT_CHARS} characters")
+    normalized = unicodedata.normalize("NFKC", text)
+    if len(normalized) > MAX_INPUT_CHARS:
+        raise ValueError(f"normalized input exceeds {MAX_INPUT_CHARS} characters")
+    return normalized
+
 
 def normalize_text(text: str) -> str:
     """Canonicalize common Unicode obfuscations for both detector layers."""
-    normalized = unicodedata.normalize("NFKC", text)
+    normalized = _bounded_nfkc(text)
     return "".join(ch for ch in normalized if unicodedata.category(ch) != "Cf")
 
 
@@ -59,7 +75,7 @@ def heuristic_score(text: str) -> float:
     # evade both all-removed and all-spaced checks. Excessive format characters
     # are themselves a high-signal obfuscation indicator; avoid exponential
     # work on attacker-controlled input. ML normalization stays unchanged.
-    normalized = unicodedata.normalize("NFKC", text)
+    normalized = _bounded_nfkc(text)
     segments = [[]]
     for char in normalized:
         if unicodedata.category(char) == "Cf":
