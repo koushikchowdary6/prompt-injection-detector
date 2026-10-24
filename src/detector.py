@@ -87,7 +87,20 @@ class PromptInjectionDetector:
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)),
             ("clf", LogisticRegression(max_iter=1000, class_weight="balanced")),
         ])
-        candidate.fit([normalize_text(text) for text in texts], labels)
+        normalized_texts = [normalize_text(text) for text in texts]
+        # The TF-IDF model discards punctuation and one-character tokens.
+        # Feature-identical prompts with contradictory labels make training
+        # internally inconsistent, even when the raw strings differ.
+        tokenizer = candidate.named_steps["tfidf"].build_tokenizer()
+        observed_labels = {}
+        for text, label in zip(normalized_texts, labels):
+            tokens = tuple(tokenizer(text.casefold()))
+            if not tokens:
+                raise ValueError("training text has no usable TF-IDF tokens")
+            if tokens in observed_labels and observed_labels[tokens] != label:
+                raise ValueError("training labels conflict for feature-equivalent prompts")
+            observed_labels[tokens] = label
+        candidate.fit(normalized_texts, labels)
         self.model = candidate
         return self
 
