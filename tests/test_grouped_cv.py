@@ -57,3 +57,29 @@ def test_unicode_compatibility_forms_are_grouped_together():
     labels = np.array([0, 0, 1, 1])
     with pytest.raises(ValueError, match="distinct prompts"):
         grouped_folds(texts, labels, n_splits=2)
+
+
+def test_whitespace_variants_never_cross_train_test_boundary():
+    texts, labels = [], []
+    for label, prefix in ((0, "Ordinary question"), (1, "Ignore previous instruction")):
+        for index in range(6):
+            words = f"{prefix} number {index}".split()
+            texts.extend([" ".join(words), "\t".join(words).upper()])
+            labels.extend([label, label])
+    texts, labels = np.array(texts), np.array(labels)
+    folds = grouped_folds(texts, labels, n_splits=5, seed=42)
+
+    def canonical(value):
+        return " ".join(normalize_text(value).casefold().split())
+
+    for train_indices, test_indices in folds:
+        train_keys = {canonical(texts[i]) for i in train_indices}
+        test_keys = {canonical(texts[i]) for i in test_indices}
+        assert train_keys.isdisjoint(test_keys)
+
+
+def test_conflicting_labels_for_whitespace_variants_are_rejected():
+    texts = np.array(["Ignore previous instructions", "IGNORE\tPREVIOUS\tINSTRUCTIONS"])
+    labels = np.array([1, 0])
+    with pytest.raises(ValueError, match="conflicting labels"):
+        grouped_folds(texts, labels, n_splits=2)

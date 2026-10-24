@@ -22,7 +22,10 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     """
     if len(texts) != len(labels) or not len(texts):
         raise ValueError("texts and labels must be non-empty and aligned")
-    groups = [normalize_text(str(t)).casefold().strip() for t in texts]
+    # TF-IDF treats runs of whitespace as token separators. Group such
+    # near-identical prompts together, including tabs/newlines, so formatting
+    # changes cannot leak the same example into both train and test folds.
+    groups = [" ".join(normalize_text(str(t)).casefold().split()) for t in texts]
     group_labels = {}
     for group, label in zip(groups, labels):
         if group in group_labels and group_labels[group] != label:
