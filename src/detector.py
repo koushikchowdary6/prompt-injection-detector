@@ -51,9 +51,22 @@ def normalize_text(text: str) -> str:
 
 def heuristic_score(text: str) -> float:
     """Fraction-based score in [0,1] from how many injection patterns match."""
-    # Both heuristics and ML must see the same normalized input, or an
-    # obfuscated directive can evade the learned layer despite rule matches.
-    hits = sum(1 for p in _COMPILED if p.search(normalize_text(text)))
+    # Invisible format characters can be inserted *inside* a keyword
+    # ("ig\\u200bnore") or *between* words ("ignore\\u200bprevious").
+    # Removing them catches the first attack but joins words in the second,
+    # bypassing rules that require whitespace. Check both interpretations
+    # without counting the same rule twice. ML retains its established
+    # canonicalization so train and inference remain feature-consistent.
+    normalized = unicodedata.normalize("NFKC", text)
+    compact = normalize_text(text)
+    separated = "".join(
+        " " if unicodedata.category(ch) == "Cf" else ch
+        for ch in normalized
+    )
+    hits = sum(
+        1 for pattern in _COMPILED
+        if pattern.search(compact) or pattern.search(separated)
+    )
     if hits == 0:
         return 0.0
     # 1 hit -> 0.7, saturating toward 1.0 with more hits.
