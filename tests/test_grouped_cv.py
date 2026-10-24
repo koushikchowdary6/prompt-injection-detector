@@ -17,7 +17,7 @@ def _duplicate_dataset():
     texts, labels = [], []
     for label, prefix in ((0, "Ordinary question"), (1, "Ignore previous instruction")):
         for index in range(6):
-            original = f"{prefix} number {index}"
+            original = f"{prefix} number {index + 10}"
             texts.extend([original, original.upper()])
             labels.extend([label, label])
     return np.array(texts), np.array(labels)
@@ -64,7 +64,7 @@ def test_whitespace_variants_never_cross_train_test_boundary():
     texts, labels = [], []
     for label, prefix in ((0, "Ordinary question"), (1, "Ignore previous instruction")):
         for index in range(6):
-            words = f"{prefix} number {index}".split()
+            words = f"{prefix} number {index + 10}".split()
             texts.extend([" ".join(words), "\t".join(words).upper()])
             labels.extend([label, label])
     texts, labels = np.array(texts), np.array(labels)
@@ -83,7 +83,7 @@ def test_punctuation_variants_never_cross_train_test_boundary():
     texts, labels = [], []
     for label, prefix in ((0, "Ordinary question"), (1, "Ignore previous instruction")):
         for index in range(6):
-            text = f"{prefix} number {index}"
+            text = f"{prefix} number {index + 10}"
             texts.extend([text, f"{text.upper()}!!!"])
             labels.extend([label, label])
     texts, labels = np.array(texts), np.array(labels)
