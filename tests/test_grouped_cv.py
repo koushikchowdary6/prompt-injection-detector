@@ -64,7 +64,7 @@ def test_whitespace_variants_never_cross_train_test_boundary():
     for label, prefix in ((0, "Ordinary question"), (1, "Ignore previous instruction")):
         for index in range(6):
             words = f"{prefix} number {index}".split()
-            texts.extend([" ".join(words), "\\t".join(words).upper()])
+            texts.extend([" ".join(words), "\t".join(words).upper()])
             labels.extend([label, label])
     texts, labels = np.array(texts), np.array(labels)
     folds = grouped_folds(texts, labels, n_splits=5, seed=42)
@@ -79,7 +79,7 @@ def test_whitespace_variants_never_cross_train_test_boundary():
 
 
 def test_conflicting_labels_for_whitespace_variants_are_rejected():
-    texts = np.array(["Ignore previous instructions", "IGNORE\\tPREVIOUS\\tINSTRUCTIONS"])
+    texts = np.array(["Ignore previous instructions", "IGNORE\tPREVIOUS\tINSTRUCTIONS"])
     labels = np.array([1, 0])
     with pytest.raises(ValueError, match="conflicting labels"):
         grouped_folds(texts, labels, n_splits=2)
