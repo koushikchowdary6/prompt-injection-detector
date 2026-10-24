@@ -16,7 +16,7 @@ The detector evaluates that text before the application sends it to the model.
 
 ### Explainable high-signal rules
 
-Regex heuristics catch recognizable attack patterns such as attempts to ignore prior instructions or reveal a system prompt. These rules are fast and auditable but cannot generalize to every paraphrase.
+Regex heuristics catch recognizable attack patterns such as attempts to ignore prior instructions or reveal a system prompt. They test bounded combinations of removal and whitespace substitution for up to eight invisible Unicode format characters, catching characters inserted inside keywords, between words, or both in one phrase. Inputs with more than eight such characters receive a high heuristic-risk score rather than triggering exponential work; this can increase false positives for legitimate text using many formatting characters. The ML classifier continues to use its existing normalization consistently for training and inference. These rules are fast and auditable but cannot generalize to every paraphrase or encoded attack.
 
 ### Statistical generalization
 

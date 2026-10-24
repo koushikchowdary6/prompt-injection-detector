@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import math
 import re
+from itertools import product
 import unicodedata
 from numbers import Integral
 
@@ -51,9 +52,35 @@ def normalize_text(text: str) -> str:
 
 def heuristic_score(text: str) -> float:
     """Fraction-based score in [0,1] from how many injection patterns match."""
-    # Both heuristics and ML must see the same normalized input, or an
-    # obfuscated directive can evade the learned layer despite rule matches.
-    hits = sum(1 for p in _COMPILED if p.search(normalize_text(text)))
+    # Invisible format characters can split keywords or replace word
+    # boundaries, even within one phrase ("ig\\u200bnore\\u200bprevious").
+    # Each character has two plausible interpretations: removed or space.
+    # Explore a bounded number of combinations so mixed obfuscation cannot
+    # evade both all-removed and all-spaced checks. Excessive format characters
+    # are themselves a high-signal obfuscation indicator; avoid exponential
+    # work on attacker-controlled input. ML normalization stays unchanged.
+    normalized = unicodedata.normalize("NFKC", text)
+    segments = [[]]
+    for char in normalized:
+        if unicodedata.category(char) == "Cf":
+            segments.append([])
+        else:
+            segments[-1].append(char)
+    pieces = ["".join(chars) for chars in segments]
+    format_count = len(pieces) - 1
+    if format_count > 8:
+        return 0.7
+    candidates = (
+        "".join(part + (separators[i] if i < format_count else "")
+                for i, part in enumerate(pieces))
+        for separators in product(("", " "), repeat=format_count)
+    )
+    # Materialize at most 256 variants; each rule is credited once even if
+    # it matches several interpretations of the same untrusted input.
+    variants = tuple(candidates)
+    hits = sum(
+        1 for pattern in _COMPILED if any(pattern.search(v) for v in variants)
+    )
     if hits == 0:
         return 0.0
     # 1 hit -> 0.7, saturating toward 1.0 with more hits.
