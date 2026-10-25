@@ -40,6 +40,9 @@ HEURISTIC_PATTERNS = [
     r"\bend\s+of\s+prompt\b",
     r"do not follow.{0,20}(policy|guidelines|openai|anthropic)",
     r"what (were|are) the.{0,20}instructions (given|you)",
+    # High-signal attempts to inject a privileged role boundary into
+    # untrusted prompt text (ChatML and Llama 3 header conventions).
+    r"(?:<\|im_start\|>|\[im_start\])\s*(?:system|developer)\b|\[start_header_id\]\s*(?:system|developer)\s*\[end_header_id\]",
 ]
 _COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERNS]
 
