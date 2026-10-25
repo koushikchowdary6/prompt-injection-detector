@@ -63,14 +63,24 @@ def _bounded_nfkc(text: str) -> str:
     return normalized
 
 
+def _is_variation_selector(char: str) -> bool:
+    """Unicode variation selectors are invisible inside ordinary words."""
+    return "\ufe00" <= char <= "\ufe0f" or "\U000e0100" <= char <= "\U000e01ef"
+
+
 def _is_hidden_separator(char: str) -> bool:
-    """Invisible format/control bytes can split attacker-supplied keywords.
+    """Invisible format/control/variation bytes can split attack keywords.
 
     Preserve ordinary whitespace (including newlines and tabs), which is
     meaningful for both prompt content and multiline heuristic patterns.
     """
     category = unicodedata.category(char)
-    return category == "Cf" or (category == "Cc" and not char.isspace())
+    return (
+        category == "Cf"
+        or (category == "Cc" and not char.isspace())
+        or char == "\u034f"  # Combining grapheme joiner (category Mn)
+        or _is_variation_selector(char)
+    )
 
 
 def normalize_text(text: str) -> str:
@@ -99,10 +109,21 @@ def heuristic_score(text: str) -> float:
         emoji_joiner = (
             char == "\u200d"
             and 0 < index < len(normalized) - 1
-            and unicodedata.category(normalized[index - 1]) == "So"
-            and unicodedata.category(normalized[index + 1]) == "So"
+            and unicodedata.category(normalized[index - 1]) in {"So", "Sk"}
+            and unicodedata.category(normalized[index + 1]) in {"So", "Sk"}
         )
-        if _is_hidden_separator(char) and not emoji_joiner:
+        # Variation selectors are also legitimate emoji modifiers (including
+        # keycap emoji). They become suspicious only outside that context,
+        # such as when inserted into "ig\ufe0fnore".
+        emoji_variation = (
+            _is_variation_selector(char)
+            and index > 0
+            and (
+                unicodedata.category(normalized[index - 1]) in {"So", "Sk"}
+                or normalized[index - 1] in "#*0123456789"
+            )
+        )
+        if _is_hidden_separator(char) and not (emoji_joiner or emoji_variation):
             segments.append([])
         else:
             segments[-1].append(char)
