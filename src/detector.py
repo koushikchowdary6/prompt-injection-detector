@@ -63,6 +63,33 @@ def _bounded_nfkc(text: str) -> str:
     return normalized
 
 
+# Common Cyrillic/Greek glyphs that visually impersonate ASCII letters.
+# Fold only within mixed-script words: native-language text stays intact.
+_CONFUSABLES = {
+    "а": "a", "е": "e", "о": "o", "р": "p", "с": "c",
+    "х": "x", "у": "y", "і": "i", "ј": "j", "ѕ": "s",
+    "ο": "o", "ι": "i", "ν": "v", "α": "a", "ε": "e",
+    "ρ": "p", "τ": "t", "κ": "k", "χ": "x",
+}
+_CONFUSABLES.update({key.upper(): value.upper() for key, value in list(_CONFUSABLES.items())})
+
+
+def _fold_mixed_script_confusables(text: str) -> str:
+    """Canonicalize lookalikes only in words mixing ASCII and mapped glyphs.
+
+    A native Cyrillic or Greek word should not be transliterated or treated
+    as an attack; a spoofed ASCII keyword such as ignоre should be detected.
+    This is deliberately a limited confusable map, not full UTS #39 support.
+    """
+    def fold(match):
+        word = match.group()
+        if not re.search(r"[A-Za-z]", word):
+            return word
+        return "".join(_CONFUSABLES.get(char, char) for char in word)
+
+    return re.sub(r"\w+", fold, text)
+
+
 def _is_variation_selector(char: str) -> bool:
     """Unicode variation selectors are invisible inside ordinary words."""
     return "\ufe00" <= char <= "\ufe0f" or "\U000e0100" <= char <= "\U000e01ef"
@@ -86,7 +113,7 @@ def _is_hidden_separator(char: str) -> bool:
 def normalize_text(text: str) -> str:
     """Canonicalize invisible Unicode and control-byte obfuscations for ML."""
     normalized = _bounded_nfkc(text)
-    return "".join(ch for ch in normalized if not _is_hidden_separator(ch))
+    return _fold_mixed_script_confusables("".join(ch for ch in normalized if not _is_hidden_separator(ch)))
 
 
 def heuristic_score(text: str) -> float:
@@ -98,7 +125,7 @@ def heuristic_score(text: str) -> float:
     # evade both all-removed and all-spaced checks. Excessive hidden separators
     # are themselves a high-signal obfuscation indicator; avoid exponential
     # work on attacker-controlled input. ML normalization stays unchanged.
-    normalized = _bounded_nfkc(text)
+    normalized = _fold_mixed_script_confusables(_bounded_nfkc(text))
     segments = [[]]
     for index, char in enumerate(normalized):
         # U+200D also joins emoji pictographs (e.g. woman-technologist).
