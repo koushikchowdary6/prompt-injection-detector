@@ -63,25 +63,35 @@ def _bounded_nfkc(text: str) -> str:
     return normalized
 
 
+def _is_hidden_separator(char: str) -> bool:
+    """Invisible format/control bytes can split attacker-supplied keywords.
+
+    Preserve ordinary whitespace (including newlines and tabs), which is
+    meaningful for both prompt content and multiline heuristic patterns.
+    """
+    category = unicodedata.category(char)
+    return category == "Cf" or (category == "Cc" and not char.isspace())
+
+
 def normalize_text(text: str) -> str:
-    """Canonicalize common Unicode obfuscations for both detector layers."""
+    """Canonicalize invisible Unicode and control-byte obfuscations for ML."""
     normalized = _bounded_nfkc(text)
-    return "".join(ch for ch in normalized if unicodedata.category(ch) != "Cf")
+    return "".join(ch for ch in normalized if not _is_hidden_separator(ch))
 
 
 def heuristic_score(text: str) -> float:
     """Fraction-based score in [0,1] from how many injection patterns match."""
-    # Invisible format characters can split keywords or replace word
-    # boundaries, even within one phrase ("ig\\u200bnore\\u200bprevious").
+    # Invisible format characters and non-whitespace control bytes can
+    # split keywords or replace boundaries ("ig\\u200bnore", "ig\\x00nore").
     # Each character has two plausible interpretations: removed or space.
     # Explore a bounded number of combinations so mixed obfuscation cannot
-    # evade both all-removed and all-spaced checks. Excessive format characters
+    # evade both all-removed and all-spaced checks. Excessive hidden separators
     # are themselves a high-signal obfuscation indicator; avoid exponential
     # work on attacker-controlled input. ML normalization stays unchanged.
     normalized = _bounded_nfkc(text)
     segments = [[]]
     for char in normalized:
-        if unicodedata.category(char) == "Cf":
+        if _is_hidden_separator(char):
             segments.append([])
         else:
             segments[-1].append(char)
