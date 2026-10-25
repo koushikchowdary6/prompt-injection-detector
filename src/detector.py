@@ -90,8 +90,19 @@ def heuristic_score(text: str) -> float:
     # work on attacker-controlled input. ML normalization stays unchanged.
     normalized = _bounded_nfkc(text)
     segments = [[]]
-    for char in normalized:
-        if _is_hidden_separator(char):
+    for index, char in enumerate(normalized):
+        # U+200D also joins emoji pictographs (e.g. woman-technologist).
+        # These ordinary glyph sequences should not consume the eight-byte
+        # obfuscation budget or be labeled suspicious by themselves. Only
+        # exempt a joiner directly between two Unicode symbols; a joiner
+        # splitting letters in an attack still receives full scrutiny.
+        emoji_joiner = (
+            char == "\u200d"
+            and 0 < index < len(normalized) - 1
+            and unicodedata.category(normalized[index - 1]) == "So"
+            and unicodedata.category(normalized[index + 1]) == "So"
+        )
+        if _is_hidden_separator(char) and not emoji_joiner:
             segments.append([])
         else:
             segments[-1].append(char)
