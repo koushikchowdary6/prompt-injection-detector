@@ -22,6 +22,13 @@ roles and unprivileged `user` / `assistant` headers are not flagged by these
 rules. This is pattern-based detection, not a guarantee against prompt
 injection or a substitute for trusted message-role separation.
 
+**Mixed-script keyword spoofing:** The heuristic and ML input paths normalize a
+small set of Greek/Cyrillic lookalikes *only inside words that also contain
+ASCII letters*. This catches attacks such as `ignоre previous instructions`
+(with a Cyrillic `о`) without transliterating ordinary Greek or Cyrillic
+sentences. It is a targeted defense, not full Unicode confusable detection;
+the regression suite covers attack examples and benign multilingual text.
+
 **Resource-safety contract:** inputs longer than 100,000 characters are rejected with `ValueError` before regex variant generation or ML vectorization. The limit is checked again after NFKC normalization, since compatibility characters can expand. This is an explicit rejection, not a claim that oversized inputs are malicious; callers should catch the error and apply their own fail-closed policy (for example, reject or quarantine the request rather than silently allowing it). The same limit applies to training and inference, and an invalid refit preserves the existing model.
 
 **Training-data contract:** `fit(texts, labels)` requires aligned, nonempty text and both integer labels: `0` for benign and `1` for injection. Invalid or single-class data is rejected before fitting so `ml_score()` cannot silently interpret the wrong probability column. NumPy integer labels are supported for cross-validation; a failed refit leaves the previous model intact.
