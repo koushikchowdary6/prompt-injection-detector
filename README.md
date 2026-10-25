@@ -14,6 +14,14 @@ complementary layers:
 
 `score()` combines heuristic and classifier signals into a bounded **risk score**, not a calibrated probability. A heuristic match retains a score floor so the ML blend cannot suppress an obvious attack signal. Before training, `score()` still uses heuristic detection; the ML-only `ml_score()` method requires `fit()`.
 
+**Role-boundary spoofing:** The heuristic layer flags forged privileged
+`system` and `developer` boundaries using ChatML (`<|im_start|>` or
+`[im_start]`) and Llama 3 (`[start_header_id]... [end_header_id]`)
+delimiters, including some Unicode-obfuscated forms. Ordinary mentions of
+roles and unprivileged `user` / `assistant` headers are not flagged by these
+rules. This is pattern-based detection, not a guarantee against prompt
+injection or a substitute for trusted message-role separation.
+
 **Resource-safety contract:** inputs longer than 100,000 characters are rejected with `ValueError` before regex variant generation or ML vectorization. The limit is checked again after NFKC normalization, since compatibility characters can expand. This is an explicit rejection, not a claim that oversized inputs are malicious; callers should catch the error and apply their own fail-closed policy (for example, reject or quarantine the request rather than silently allowing it). The same limit applies to training and inference, and an invalid refit preserves the existing model.
 
 **Training-data contract:** `fit(texts, labels)` requires aligned, nonempty text and both integer labels: `0` for benign and `1` for injection. Invalid or single-class data is rejected before fitting so `ml_score()` cannot silently interpret the wrong probability column. NumPy integer labels are supported for cross-validation; a failed refit leaves the previous model intact.
