@@ -15,6 +15,7 @@ input -- and it connects to my SigmaForge research on adversarial context.
 """
 from __future__ import annotations
 
+import html
 import math
 import re
 from itertools import product
@@ -57,7 +58,14 @@ def _bounded_nfkc(text: str) -> str:
         raise ValueError("input must be a string")
     if len(text) > MAX_INPUT_CHARS:
         raise ValueError(f"input exceeds {MAX_INPUT_CHARS} characters")
-    normalized = unicodedata.normalize("NFKC", text)
+    # Untrusted retrieved HTML may encode attack instructions as character
+    # references (e.g. &#73;gnore or &lt;|im_start|&gt;). Decode once,
+    # consistently for heuristic and ML paths, before Unicode normalization.
+    # Keep pre/post bounds so decoding and NFKC cannot expand inputs unchecked.
+    decoded = html.unescape(text)
+    if len(decoded) > MAX_INPUT_CHARS:
+        raise ValueError(f"decoded input exceeds {MAX_INPUT_CHARS} characters")
+    normalized = unicodedata.normalize("NFKC", decoded)
     if len(normalized) > MAX_INPUT_CHARS:
         raise ValueError(f"normalized input exceeds {MAX_INPUT_CHARS} characters")
     return normalized
