@@ -22,6 +22,15 @@ roles and unprivileged `user` / `assistant` headers are not flagged by these
 rules. This is pattern-based detection, not a guarantee against prompt
 injection or a substitute for trusted message-role separation.
 
+**Encoded input normalization:** Retrieved HTML entities and URL/form
+percent-encoded text are decoded once before Unicode normalization in both
+heuristic and ML paths. This detects selected encoded instruction overrides
+and forged role delimiters without recursively decoding double-encoded input.
+Malformed percent-encoded UTF-8 is rejected with `ValueError`; callers must
+treat rejected input as untrusted rather than silently allowing it. This
+changes feature interpretation for percent-encoded benign text as well, so
+downstream systems should evaluate false positives on their own data.
+
 **Mixed-script keyword spoofing:** The heuristic and ML input paths normalize a
 small set of Greek/Cyrillic lookalikes *only inside words that also contain
 ASCII letters*. This catches attacks such as `ignоre previous instructions`
