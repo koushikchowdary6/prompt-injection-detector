@@ -21,6 +21,7 @@ import re
 from itertools import product
 import unicodedata
 from numbers import Integral
+from urllib.parse import unquote
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
@@ -62,7 +63,14 @@ def _bounded_nfkc(text: str) -> str:
     # references (e.g. &#73;gnore or &lt;|im_start|&gt;). Decode once,
     # consistently for heuristic and ML paths, before Unicode normalization.
     # Keep pre/post bounds so decoding and NFKC cannot expand inputs unchecked.
-    decoded = html.unescape(text)
+    # Retrieved URLs and form bodies may percent-encode instructions or
+    # privileged role delimiters. Decode exactly once, after HTML entities,
+    # for consistent heuristic/ML features. Reject malformed UTF-8 rather
+    # than silently replacing bytes and changing the security decision.
+    try:
+        decoded = unquote(html.unescape(text), encoding="utf-8", errors="strict")
+    except UnicodeDecodeError as exc:
+        raise ValueError("input contains invalid UTF-8 percent encoding") from exc
     if len(decoded) > MAX_INPUT_CHARS:
         raise ValueError(f"decoded input exceeds {MAX_INPUT_CHARS} characters")
     normalized = unicodedata.normalize("NFKC", decoded)
