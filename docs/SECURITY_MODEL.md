@@ -18,6 +18,10 @@ The detector evaluates that text before the application sends it to the model.
 
 Regex heuristics catch recognizable attack patterns such as attempts to ignore prior instructions or reveal a system prompt. They test bounded combinations of removal and whitespace substitution for up to eight invisible Unicode format characters, catching characters inserted inside keywords, between words, or both in one phrase. Inputs with more than eight suspicious separators receive a high heuristic-risk score rather than triggering exponential work. Ordinary U+200D emoji joiners directly between Unicode symbols are excluded from this budget, reducing false positives for emoji-heavy messages; joiners inserted between letters remain suspicious. Other legitimate text with many invisible formatting characters can still receive false positives. The ML classifier continues to use its existing normalization consistently for training and inference. These rules are fast and auditable but cannot generalize to every paraphrase or encoded attack.
 
+### Encoded HTML content
+
+Both heuristic scoring and ML feature normalization decode HTML character references once before Unicode normalization. This catches straightforward obfuscation such as `&#73;gnore previous instructions` and encoded ChatML delimiters in retrieved HTML. The input size limit remains enforced before and after decoding. This is **not** a general-purpose HTML sanitizer, browser parser, or recursive decoder; percent encoding, multi-layer encodings, and attacks that rely on application-specific rendering can still evade it. Security documentation quoting encoded role delimiters may also produce false positives.
+
 ### Statistical generalization
 
 The TF-IDF + logistic-regression layer can score phrasings that do not exactly match a heuristic. Because the bundled training set is small, this model demonstrates the architecture rather than establishing production-grade detection accuracy.
