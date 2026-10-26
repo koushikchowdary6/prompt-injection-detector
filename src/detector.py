@@ -125,7 +125,10 @@ def heuristic_score(text: str) -> float:
     # evade both all-removed and all-spaced checks. Excessive hidden separators
     # are themselves a high-signal obfuscation indicator; avoid exponential
     # work on attacker-controlled input. ML normalization stays unchanged.
-    normalized = _fold_mixed_script_confusables(_bounded_nfkc(text))
+    # Fold lookalike letters *after* joining candidate segments. A Cyrillic
+    # glyph isolated by invisible separators is not yet in a mixed-script
+    # word; folding before separator removal misses that combined evasion.
+    normalized = _bounded_nfkc(text)
     segments = [[]]
     for index, char in enumerate(normalized):
         # U+200D also joins emoji pictographs (e.g. woman-technologist).
@@ -165,7 +168,7 @@ def heuristic_score(text: str) -> float:
     )
     # Materialize at most 256 variants; each rule is credited once even if
     # it matches several interpretations of the same untrusted input.
-    variants = tuple(candidates)
+    variants = tuple(_fold_mixed_script_confusables(candidate) for candidate in candidates)
     hits = sum(
         1 for pattern in _COMPILED if any(pattern.search(v) for v in variants)
     )
