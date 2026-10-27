@@ -59,7 +59,18 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     splitter = StratifiedGroupKFold(
         n_splits=n_splits, shuffle=True, random_state=seed
     )
-    return list(splitter.split(texts, labels, groups=groups))
+    folds = list(splitter.split(texts, labels, groups=groups))
+    # Enough independent groups per class does not guarantee every *training*
+    # partition contains both labels: grouped stratification is approximate,
+    # especially with uneven group sizes. LogisticRegression cannot fit a
+    # single-class training partition, and a partial CV sweep is misleading.
+    for fold_index, (train_indices, _) in enumerate(folds, start=1):
+        if {labels[index] for index in train_indices} != {0, 1}:
+            raise ValueError(
+                f"grouped CV fold {fold_index} has a single-class training "
+                "partition; use more independent groups or a different seed"
+            )
+    return folds
 
 
 def evaluate(ml_weight: float = 0.5, seed: int = 0):
