@@ -51,7 +51,8 @@ model (untrusted text steering an LLM), from the defensive side.
 
 ```bash
 pip install -r requirements.txt
-python src/train.py      # 5-fold cross-validation + live demo
+python src/train.py                 # 5-fold grouped CV at threshold 0.5
+python src/train.py --threshold 0.65  # evaluate a stricter operating point
 ```
 
 ```python
@@ -68,11 +69,11 @@ print(det.is_injection("Ignore all previous instructions"))
 
 The evaluator uses stratified **grouped** folds, keeping case/Unicode-equivalent prompts entirely in training or testing (never both). Conflicting labels and insufficient distinct examples fail with clear errors. The evaluator also rejects any grouped fold whose training **or held-out** partition contains only one class; grouped stratification is approximate, and single-class held-out folds cannot assess both false alarms and missed attacks. This avoids misleading coverage when a dataset includes duplicates or uneven groups. The bundled examples are small and illustrative, not an independent security benchmark.
 
-The CLI also reports pooled out-of-fold **F1**, **false-positive rate** (`FP / (FP + TN)`),
+The CLI accepts `--threshold` in [0, 1] and reports the chosen operating point. It also reports pooled out-of-fold **F1**, **false-positive rate** (`FP / (FP + TN)`), and **false-negative rate** (`FN / (FN + TP)`),
 held-out support, and a `TP/FP/TN/FN` confusion matrix. This makes false alarms
 on benign prompts and missed injections visible alongside accuracy. The
 false-positive rate is `n/a` if a caller supplies no benign held-out samples;
-zero is not substituted for an undefined rate. These are **illustrative**
+zero is not substituted for an undefined rate; the false-negative rate is likewise `n/a` if no attack samples exist. Compare thresholds on the **same held-out splits** to see the false-alarm versus missed-attack tradeoff. Choosing a threshold using these same folds is exploratory and does not provide an unbiased estimate of tuned performance; use separate validation/test data for deployment. These are **illustrative**
 measurements on the included dataset, not production detection guarantees.
 
 On the bundled labeled example set (illustrative, subject to fold composition):
