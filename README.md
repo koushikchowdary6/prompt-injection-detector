@@ -47,6 +47,25 @@ This is the applied-security companion to my
 adversarial context can sabotage LLM-generated detection rules — same threat
 model (untrusted text steering an LLM), from the defensive side.
 
+## Grouped-CV decision-threshold sweep
+
+Compare the operational false-alarm versus missed-attack tradeoff without
+retraining the model separately for each threshold:
+
+```bash
+python src/train.py --thresholds 0.3 0.5 0.7
+# Or inspect one chosen threshold:
+python src/train.py --threshold 0.6
+```
+
+The sweep trains once per group-disjoint fold, scores each held-out prompt once,
+and pools TP/FP/TN/FN counts at each threshold. It checks for overlapping or
+missing held-out samples and invalid model scores before reporting results.
+The displayed scores are **risk scores, not calibrated probabilities**. Choosing
+a threshold based on this same sweep is exploratory: validate the chosen
+threshold on a separate, representative holdout before deployment. Neither
+cross-validation nor regex-based guardrails guarantee resistance to new attacks.
+
 ## Quickstart
 
 ```bash

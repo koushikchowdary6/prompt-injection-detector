@@ -84,58 +84,110 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     return folds
 
 
-def evaluate(ml_weight: float = 0.5, seed: int = 0, threshold: float = 0.5):
-    """Evaluate a chosen guardrail decision threshold on grouped held-out folds."""
-    if (isinstance(threshold, bool) or not isinstance(threshold, (int, float))
-            or not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0):
-        raise ValueError("threshold must be a finite number between 0 and 1")
+def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed: int = 0):
+    """Evaluate several thresholds on identical out-of-fold scores.
+
+    Each training fold is fitted exactly once; no held-out prompt is used
+    for training or scored twice. These are descriptive CV tradeoffs, not
+    an unbiased estimate of a threshold selected on this same dataset.
+    """
+    if (not isinstance(thresholds, (list, tuple)) or not thresholds
+            or any(isinstance(t, bool) or not isinstance(t, (int, float))
+                   or not math.isfinite(t) or not 0.0 <= t <= 1.0
+                   for t in thresholds)
+            or len(set(thresholds)) != len(thresholds)):
+        raise ValueError("thresholds must be distinct finite numbers between 0 and 1")
+
     texts, labels = examples.load()
     texts, labels = np.array(texts), np.array(labels)
     folds = grouped_folds(texts, labels, n_splits=5, seed=seed)
-    correct, evaluated, tp, fp, fn, tn = 0, 0, 0, 0, 0, 0
+    # Store one prediction per original sample and threshold. Checking the
+    # partition prevents accidental double counting if a custom splitter
+    # yields overlapping or incomplete held-out folds.
+    predictions = {threshold: {} for threshold in thresholds}
     for tr, te in folds:
         det = PromptInjectionDetector(ml_weight=ml_weight)
         det.fit(list(texts[tr]), list(labels[tr]))
-        preds = [int(det.is_injection(t, threshold=threshold)) for t in texts[te]]
-        for p, y in zip(preds, labels[te]):
-            tp += p == 1 and y == 1
-            fp += p == 1 and y == 0
-            fn += p == 0 and y == 1
-            tn += p == 0 and y == 0
-        # Pool out-of-fold predictions: fold sizes can differ under grouped CV.
-        # A mean of fold accuracies would overweight small test folds.
-        correct += sum(p == y for p, y in zip(preds, labels[te]))
-        evaluated += len(te)
-    precision = tp / (tp + fp) if tp + fp else 0.0
-    recall = tp / (tp + fn) if tp + fn else 0.0
-    # An injection guardrail needs visibility into *both* missed attacks and
-    # benign requests blocked. All counts come from pooled held-out predictions,
-    # not from a mean of unequal-sized fold metrics.
-    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
-    false_positive_rate = fp / (fp + tn) if fp + tn else None
-    false_negative_rate = fn / (fn + tp) if fn + tp else None
-    return {
-        "threshold": threshold,
-        "accuracy": correct / evaluated,
-        "precision": precision,
-        "recall": recall,
-        "f1": f1,
-        "false_positive_rate": false_positive_rate,
-        "false_negative_rate": false_negative_rate,
-        "support": evaluated,
-        "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
-    }
+        for index in te:
+            i = int(index)
+            if i < 0 or i >= len(labels) or i in predictions[thresholds[0]]:
+                raise ValueError("grouped CV held-out folds overlap or contain invalid indices")
+            # Real detectors score once per held-out sample, then reuse that
+            # score across thresholds. Support simple is_injection-only test
+            # doubles without changing the public evaluate() contract.
+            if callable(getattr(det, "score", None)):
+                score = det.score(texts[i])
+                if (not isinstance(score, (int, float)) or not math.isfinite(score)
+                        or not 0.0 <= score <= 1.0):
+                    raise ValueError("detector returned an invalid risk score")
+                decisions = {threshold: int(score >= threshold) for threshold in thresholds}
+            else:
+                decisions = {
+                    threshold: int(det.is_injection(texts[i], threshold=threshold))
+                    for threshold in thresholds
+                }
+            for threshold, prediction in decisions.items():
+                predictions[threshold][i] = prediction
+
+    if set(predictions[thresholds[0]]) != set(range(len(labels))):
+        raise ValueError("grouped CV did not evaluate every sample exactly once")
+
+    summaries = []
+    for threshold in thresholds:
+        tp = fp = tn = fn = 0
+        for index, prediction in predictions[threshold].items():
+            actual = labels[index]
+            tp += prediction == 1 and actual == 1
+            fp += prediction == 1 and actual == 0
+            tn += prediction == 0 and actual == 0
+            fn += prediction == 0 and actual == 1
+        support = tp + fp + tn + fn
+        precision = tp / (tp + fp) if tp + fp else 0.0
+        recall = tp / (tp + fn) if tp + fn else 0.0
+        f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        summaries.append({
+            "threshold": threshold,
+            "accuracy": (tp + tn) / support,
+            "precision": precision,
+            "recall": recall,
+            "f1": f1,
+            "false_positive_rate": fp / (fp + tn) if fp + tn else None,
+            "false_negative_rate": fn / (fn + tp) if fn + tp else None,
+            "support": support,
+            "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
+        })
+    return summaries
+
+
+def evaluate(ml_weight: float = 0.5, seed: int = 0, threshold: float = 0.5):
+    """Evaluate one guardrail threshold on pooled, grouped held-out folds."""
+    return evaluate_thresholds((threshold,), ml_weight=ml_weight, seed=seed)[0]
 
 
 if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Grouped held-out prompt-injection evaluation")
     parser.add_argument("--threshold", type=float, default=0.5,
                         help="guardrail decision threshold from 0 to 1 (default: 0.5)")
+    parser.add_argument("--thresholds", type=float, nargs="+", default=None,
+                        help="evaluate multiple thresholds with one fit per CV fold")
     args = parser.parse_args()
     try:
-        m = evaluate(threshold=args.threshold)
+        summaries = (evaluate_thresholds(tuple(args.thresholds))
+                     if args.thresholds is not None else [evaluate(threshold=args.threshold)])
     except ValueError as exc:
         parser.error(str(exc))
+    if len(summaries) > 1:
+        print("Grouped CV threshold sweep (descriptive, not independently validated):")
+        print("  threshold  F1     FPR    FNR    TP/FP/TN/FN")
+        for item in summaries:
+            counts = item["confusion_matrix"]
+            print(f"  {item['threshold']:.3f}      {item['f1']:.3f}  "
+                  f"{item['false_positive_rate']:.3f}  "
+                  f"{item['false_negative_rate']:.3f}  "
+                  f"{counts['tp']}/{counts['fp']}/{counts['tn']}/{counts['fn']}")
+        print("Threshold selection on these same folds is exploratory; "
+              "evaluate the chosen threshold on a separate holdout.")
+    m = summaries[0]
     print("5-fold cross-validation on the labeled example set:")
     print(f"  threshold: {m['threshold']:.3f}")
     print(f"  accuracy : {m['accuracy']:.3f}")
@@ -160,4 +212,4 @@ if __name__ == "__main__":
     ]
     print("\nFresh examples:")
     for d in demos:
-        print(f"  {det.score(d):.2f}  {'INJECTION' if det.is_injection(d) else 'benign':9}  {d[:55]}")
+        print(f"  {det.score(d):.2f}  {'INJECTION' if det.is_injection(d, threshold=(args.thresholds[0] if args.thresholds else args.threshold)) else 'benign':9}  {d[:55]}")
