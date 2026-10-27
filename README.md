@@ -66,7 +66,7 @@ print(det.is_injection("Ignore all previous instructions"))
 
 ## Results (5-fold cross-validation)
 
-The evaluator uses stratified **grouped** folds, keeping case/Unicode-equivalent prompts entirely in training or testing (never both). Conflicting labels and insufficient distinct examples fail with clear errors. This avoids inflated scores when a dataset includes duplicate prompt variants. The bundled examples are small and illustrative, not an independent security benchmark.
+The evaluator uses stratified **grouped** folds, keeping case/Unicode-equivalent prompts entirely in training or testing (never both). Conflicting labels and insufficient distinct examples fail with clear errors. The evaluator also rejects any grouped fold whose training **or held-out** partition contains only one class; grouped stratification is approximate, and single-class held-out folds cannot assess both false alarms and missed attacks. This avoids misleading coverage when a dataset includes duplicates or uneven groups. The bundled examples are small and illustrative, not an independent security benchmark.
 
 On the bundled labeled example set (illustrative, subject to fold composition):
 
