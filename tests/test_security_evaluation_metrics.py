@@ -30,7 +30,7 @@ def _stub_evaluation(monkeypatch, labels, predicted):
         def fit(self, texts, labels):
             return self
 
-        def is_injection(self, text):
+        def is_injection(self, text, threshold=0.5):
             return decisions[text]
 
     monkeypatch.setattr(train, "PromptInjectionDetector", StubDetector)

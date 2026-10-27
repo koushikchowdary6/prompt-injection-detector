@@ -31,7 +31,7 @@ def test_evaluate_pools_out_of_fold_predictions_instead_of_fold_means(monkeypatc
         def fit(self, texts, labels):
             return self
 
-        def is_injection(self, text):
+        def is_injection(self, text, threshold=0.5):
             return False
 
     monkeypatch.setattr(train, "PromptInjectionDetector", AlwaysBenign)
