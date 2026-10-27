@@ -207,11 +207,19 @@ class PromptInjectionDetector:
         predict_proba()[0, 1] assumes class 1 is the injection label. Reject
         mislabeled, single-class, or mismatched training data before fitting.
         """
-        if not texts or len(texts) != len(labels):
+        if texts is None or labels is None or len(texts) == 0 or len(texts) != len(labels):
             raise ValueError("training texts and labels must be non-empty and aligned")
-        if any(not isinstance(text, str) or not normalize_text(text).strip()
-               for text in texts):
-            raise ValueError("training texts must be non-empty strings")
+        # Normalize once per example. The previous validation pass decoded
+        # every untrusted prompt and then repeated the same work before fit.
+        # A list or NumPy array of texts should follow the same validation.
+        normalized_texts = []
+        for text in texts:
+            if not isinstance(text, str):
+                raise ValueError("training texts must be non-empty strings")
+            normalized = normalize_text(text)
+            if not normalized.strip():
+                raise ValueError("training texts must be non-empty strings")
+            normalized_texts.append(normalized)
         if any(isinstance(label, bool) or not isinstance(label, Integral)
                or label not in (0, 1) for label in labels):
             raise ValueError("training labels must be integers 0 (benign) or 1 (injection)")
@@ -221,7 +229,6 @@ class PromptInjectionDetector:
             ("tfidf", TfidfVectorizer(ngram_range=(1, 2), min_df=1, sublinear_tf=True)),
             ("clf", LogisticRegression(max_iter=1000, class_weight="balanced")),
         ])
-        normalized_texts = [normalize_text(text) for text in texts]
         # Compare the *actual* features the vectorizer will train on,
         # including its lowercase preprocessing and n-gram generation.
         # Using str.casefold() with build_tokenizer() is not equivalent to
