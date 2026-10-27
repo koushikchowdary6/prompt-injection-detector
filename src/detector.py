@@ -232,7 +232,10 @@ class PromptInjectionDetector:
         analyzer = candidate.named_steps["tfidf"].build_analyzer()
         observed_labels = {}
         for text, label in zip(normalized_texts, labels):
-            features = tuple(analyzer(text))
+            # TF-IDF ignores feature order; only n-gram counts matter.
+            # Permuted text can produce the same vector and must not carry
+            # contradictory training labels.
+            features = tuple(sorted(analyzer(text)))
             if not features:
                 raise ValueError("training text has no usable TF-IDF tokens")
             if features in observed_labels and observed_labels[features] != label:
