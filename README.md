@@ -68,6 +68,13 @@ print(det.is_injection("Ignore all previous instructions"))
 
 The evaluator uses stratified **grouped** folds, keeping case/Unicode-equivalent prompts entirely in training or testing (never both). Conflicting labels and insufficient distinct examples fail with clear errors. The evaluator also rejects any grouped fold whose training **or held-out** partition contains only one class; grouped stratification is approximate, and single-class held-out folds cannot assess both false alarms and missed attacks. This avoids misleading coverage when a dataset includes duplicates or uneven groups. The bundled examples are small and illustrative, not an independent security benchmark.
 
+The CLI also reports pooled out-of-fold **F1**, **false-positive rate** (`FP / (FP + TN)`),
+held-out support, and a `TP/FP/TN/FN` confusion matrix. This makes false alarms
+on benign prompts and missed injections visible alongside accuracy. The
+false-positive rate is `n/a` if a caller supplies no benign held-out samples;
+zero is not substituted for an undefined rate. These are **illustrative**
+measurements on the included dataset, not production detection guarantees.
+
 On the bundled labeled example set (illustrative, subject to fold composition):
 
 | Metric | Score |
