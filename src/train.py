@@ -40,7 +40,7 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     analyzer = TfidfVectorizer(
         ngram_range=(1, 2), min_df=1, sublinear_tf=True
     ).build_analyzer()
-    groups = ["\\x1f".join(analyzer(normalize_text(t))) for t in texts]
+    groups = ["\x1f".join(analyzer(normalize_text(t))) for t in texts]
     if any(not group for group in groups):
         raise ValueError("each prompt must contain at least one TF-IDF token")
     group_labels = {}
