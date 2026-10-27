@@ -64,10 +64,19 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     # partition contains both labels: grouped stratification is approximate,
     # especially with uneven group sizes. LogisticRegression cannot fit a
     # single-class training partition, and a partial CV sweep is misleading.
-    for fold_index, (train_indices, _) in enumerate(folds, start=1):
+    for fold_index, (train_indices, test_indices) in enumerate(folds, start=1):
         if {labels[index] for index in train_indices} != {0, 1}:
             raise ValueError(
                 f"grouped CV fold {fold_index} has a single-class training "
+                "partition; use more independent groups or a different seed"
+            )
+        # Grouped stratification is approximate. A held-out fold with only
+        # one class cannot independently assess false positives and missed
+        # attacks, even if its training partition can fit a classifier.
+        # Fail before the evaluation sweep reports misleading fold coverage.
+        if {labels[index] for index in test_indices} != {0, 1}:
+            raise ValueError(
+                f"grouped CV fold {fold_index} has a single-class held-out "
                 "partition; use more independent groups or a different seed"
             )
     return folds
