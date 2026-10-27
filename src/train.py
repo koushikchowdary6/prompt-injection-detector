@@ -32,11 +32,15 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     if any(not isinstance(t, str) for t in texts):
         raise ValueError("texts must contain strings")
 
-    # Group by the same tokenization the TF-IDF classifier actually sees.
-    # Punctuation, case, whitespace and Unicode compatibility differences
-    # otherwise let feature-identical prompts leak across train/test folds.
-    tokenizer = TfidfVectorizer().build_tokenizer()
-    groups = [" ".join(tokenizer(normalize_text(t).casefold())) for t in texts]
+    # Group by the exact analyzer used by PromptInjectionDetector.fit.
+    # str.casefold() is NOT sklearn's lowercase preprocessing: for example,
+    # "straße" and "STRASSE" remain different feature vectors. Grouping
+    # those together can reject valid opposite labels and distort fold counts.
+    # Include the model's bigrams, not just tokens, to match its feature view.
+    analyzer = TfidfVectorizer(
+        ngram_range=(1, 2), min_df=1, sublinear_tf=True
+    ).build_analyzer()
+    groups = ["\\x1f".join(analyzer(normalize_text(t))) for t in texts]
     if any(not group for group in groups):
         raise ValueError("each prompt must contain at least one TF-IDF token")
     group_labels = {}
