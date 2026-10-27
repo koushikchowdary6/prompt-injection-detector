@@ -1,6 +1,8 @@
 """Train + evaluate the prompt-injection detector with cross-validation."""
 from __future__ import annotations
 
+import argparse
+import math
 import sys
 from numbers import Integral
 from pathlib import Path
@@ -82,7 +84,11 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     return folds
 
 
-def evaluate(ml_weight: float = 0.5, seed: int = 0):
+def evaluate(ml_weight: float = 0.5, seed: int = 0, threshold: float = 0.5):
+    """Evaluate a chosen guardrail decision threshold on grouped held-out folds."""
+    if (isinstance(threshold, bool) or not isinstance(threshold, (int, float))
+            or not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0):
+        raise ValueError("threshold must be a finite number between 0 and 1")
     texts, labels = examples.load()
     texts, labels = np.array(texts), np.array(labels)
     folds = grouped_folds(texts, labels, n_splits=5, seed=seed)
@@ -90,7 +96,7 @@ def evaluate(ml_weight: float = 0.5, seed: int = 0):
     for tr, te in folds:
         det = PromptInjectionDetector(ml_weight=ml_weight)
         det.fit(list(texts[tr]), list(labels[tr]))
-        preds = [int(det.is_injection(t)) for t in texts[te]]
+        preds = [int(det.is_injection(t, threshold=threshold)) for t in texts[te]]
         for p, y in zip(preds, labels[te]):
             tp += p == 1 and y == 1
             fp += p == 1 and y == 0
@@ -107,26 +113,39 @@ def evaluate(ml_weight: float = 0.5, seed: int = 0):
     # not from a mean of unequal-sized fold metrics.
     f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
     false_positive_rate = fp / (fp + tn) if fp + tn else None
+    false_negative_rate = fn / (fn + tp) if fn + tp else None
     return {
+        "threshold": threshold,
         "accuracy": correct / evaluated,
         "precision": precision,
         "recall": recall,
         "f1": f1,
         "false_positive_rate": false_positive_rate,
+        "false_negative_rate": false_negative_rate,
         "support": evaluated,
         "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
     }
 
 
 if __name__ == "__main__":
-    m = evaluate()
+    parser = argparse.ArgumentParser(description="Grouped held-out prompt-injection evaluation")
+    parser.add_argument("--threshold", type=float, default=0.5,
+                        help="guardrail decision threshold from 0 to 1 (default: 0.5)")
+    args = parser.parse_args()
+    try:
+        m = evaluate(threshold=args.threshold)
+    except ValueError as exc:
+        parser.error(str(exc))
     print("5-fold cross-validation on the labeled example set:")
+    print(f"  threshold: {m['threshold']:.3f}")
     print(f"  accuracy : {m['accuracy']:.3f}")
     print(f"  precision: {m['precision']:.3f}")
     print(f"  recall   : {m['recall']:.3f}")
     print(f"  F1       : {m['f1']:.3f}")
     print(f"  FPR      : {m['false_positive_rate']:.3f}" if m['false_positive_rate'] is not None
           else "  FPR      : n/a (no benign samples)")
+    print(f"  FNR      : {m['false_negative_rate']:.3f}" if m['false_negative_rate'] is not None
+          else "  FNR      : n/a (no attack samples)")
     print(f"  held-out : {m['support']} prompts")
     print(f"  TP/FP/TN/FN: {m['confusion_matrix']}")
 
