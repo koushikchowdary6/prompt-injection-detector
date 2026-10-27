@@ -86,7 +86,7 @@ def evaluate(ml_weight: float = 0.5, seed: int = 0):
     texts, labels = examples.load()
     texts, labels = np.array(texts), np.array(labels)
     folds = grouped_folds(texts, labels, n_splits=5, seed=seed)
-    correct, evaluated, tp, fp, fn = 0, 0, 0, 0, 0
+    correct, evaluated, tp, fp, fn, tn = 0, 0, 0, 0, 0, 0
     for tr, te in folds:
         det = PromptInjectionDetector(ml_weight=ml_weight)
         det.fit(list(texts[tr]), list(labels[tr]))
@@ -95,13 +95,27 @@ def evaluate(ml_weight: float = 0.5, seed: int = 0):
             tp += p == 1 and y == 1
             fp += p == 1 and y == 0
             fn += p == 0 and y == 1
+            tn += p == 0 and y == 0
         # Pool out-of-fold predictions: fold sizes can differ under grouped CV.
         # A mean of fold accuracies would overweight small test folds.
         correct += sum(p == y for p, y in zip(preds, labels[te]))
         evaluated += len(te)
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / (tp + fn) if tp + fn else 0.0
-    return {"accuracy": correct / evaluated, "precision": precision, "recall": recall}
+    # An injection guardrail needs visibility into *both* missed attacks and
+    # benign requests blocked. All counts come from pooled held-out predictions,
+    # not from a mean of unequal-sized fold metrics.
+    f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+    false_positive_rate = fp / (fp + tn) if fp + tn else None
+    return {
+        "accuracy": correct / evaluated,
+        "precision": precision,
+        "recall": recall,
+        "f1": f1,
+        "false_positive_rate": false_positive_rate,
+        "support": evaluated,
+        "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
+    }
 
 
 if __name__ == "__main__":
@@ -110,6 +124,11 @@ if __name__ == "__main__":
     print(f"  accuracy : {m['accuracy']:.3f}")
     print(f"  precision: {m['precision']:.3f}")
     print(f"  recall   : {m['recall']:.3f}")
+    print(f"  F1       : {m['f1']:.3f}")
+    print(f"  FPR      : {m['false_positive_rate']:.3f}" if m['false_positive_rate'] is not None
+          else "  FPR      : n/a (no benign samples)")
+    print(f"  held-out : {m['support']} prompts")
+    print(f"  TP/FP/TN/FN: {m['confusion_matrix']}")
 
     # Train on all data and show it on a few fresh phrasings.
     texts, labels = examples.load()
