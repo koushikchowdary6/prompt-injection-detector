@@ -63,6 +63,15 @@ python src/train.py --threshold 0.6
 The sweep trains once per group-disjoint fold, scores each held-out prompt once,
 and pools TP/FP/TN/FN counts at each threshold. It checks for overlapping or
 missing held-out samples and invalid model scores before reporting results.
+The report also includes **balanced accuracy** (mean of attack recall and
+benign recall), class support, and approximate **95% Wilson intervals** for
+false-positive and false-negative rates. Balanced accuracy helps expose a
+classifier that looks accurate only because most inputs are benign. The
+intervals describe uncertainty in the pooled held-out counts, **not**
+independent deployment confidence: CV folds share training data, and tuning a
+threshold on these same examples introduces selection bias. A zero observed
+error rate with a small class support still has a nonzero Wilson upper bound.
+
 The displayed scores are **risk scores, not calibrated probabilities**. Choosing
 a threshold based on this same sweep is exploratory: validate the chosen
 threshold on a separate, representative holdout before deployment. Neither
