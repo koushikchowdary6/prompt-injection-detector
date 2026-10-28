@@ -88,13 +88,19 @@ def test_ml_score_requires_training():
         assert "fit()" in str(exc)
 
 
-@pytest.mark.parametrize("weight", [-0.01, 1.01, float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize("weight", [
+    -0.01, 1.01, float("nan"), float("inf"), -float("inf"),
+    True, False, None, "0.5", object(),
+])
 def test_invalid_ml_weights_rejected_before_training(weight):
     with pytest.raises(ValueError, match="ml_weight"):
         PromptInjectionDetector(ml_weight=weight)
 
 
-@pytest.mark.parametrize("threshold", [-0.01, 1.01, float("nan"), float("inf"), -float("inf")])
+@pytest.mark.parametrize("threshold", [
+    -0.01, 1.01, float("nan"), float("inf"), -float("inf"),
+    True, False, None, "0.5", object(),
+])
 def test_invalid_thresholds_rejected_before_scoring(threshold):
     detector = PromptInjectionDetector()
     with pytest.raises(ValueError, match="threshold"):
