@@ -270,9 +270,11 @@ class PromptInjectionDetector:
         # A broken or tampered classifier must not produce NaN/Inf risk
         # scores: comparing NaN against a threshold silently returns False,
         # which would classify untrusted text as benign (fail open).
+        # Preserve explicit input-validation errors for oversized prompts.
+        normalized = normalize_text(text)
         try:
             probabilities = np.asarray(
-                self.model.predict_proba([normalize_text(text)]), dtype=float
+                self.model.predict_proba([normalized]), dtype=float
             )
         except (TypeError, ValueError) as exc:
             raise ValueError("model returned invalid class probabilities") from exc
