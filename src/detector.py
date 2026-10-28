@@ -267,7 +267,26 @@ class PromptInjectionDetector:
     def ml_score(self, text: str) -> float:
         if self.model is None:
             raise RuntimeError("call fit() before scoring")
-        return float(self.model.predict_proba([normalize_text(text)])[0, 1])
+        # A broken or tampered classifier must not produce NaN/Inf risk
+        # scores: comparing NaN against a threshold silently returns False,
+        # which would classify untrusted text as benign (fail open).
+        # Preserve explicit input-validation errors for oversized prompts.
+        normalized = normalize_text(text)
+        try:
+            probabilities = np.asarray(
+                self.model.predict_proba([normalized]), dtype=float
+            )
+        except (TypeError, ValueError) as exc:
+            raise ValueError("model returned invalid class probabilities") from exc
+        if (
+            probabilities.shape != (1, 2)
+            or not np.isfinite(probabilities).all()
+            or np.any(probabilities < 0.0)
+            or np.any(probabilities > 1.0)
+            or not np.isclose(probabilities.sum(), 1.0, rtol=0.0, atol=1e-6)
+        ):
+            raise ValueError("model returned invalid class probabilities")
+        return float(probabilities[0, 1])
 
     def score(self, text: str) -> float:
         """Blend heuristic and ML scores. Heuristics can only *raise* suspicion."""
