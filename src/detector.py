@@ -272,6 +272,17 @@ class PromptInjectionDetector:
         # which would classify untrusted text as benign (fail open).
         # Preserve explicit input-validation errors for oversized prompts.
         normalized = normalize_text(text)
+        # predict_proba columns follow model.classes_, not a universal
+        # [benign, injection] convention. A replaced/reloaded classifier
+        # with reversed or nonbinary labels must never invert the risk score.
+        # Minimal test doubles may omit classes_; sklearn Pipelines expose it.
+        classes = getattr(self.model, "classes_", None)
+        if classes is not None:
+            labels = np.asarray(classes)
+            if (labels.shape != (2,)
+                    or not np.issubdtype(labels.dtype, np.integer)
+                    or not np.array_equal(labels, [0, 1])):
+                raise ValueError("model classes must be ordered as [0, 1]")
         try:
             probabilities = np.asarray(
                 self.model.predict_proba([normalized]), dtype=float
