@@ -216,7 +216,11 @@ def heuristic_score(text: str) -> float:
 
 class PromptInjectionDetector:
     def __init__(self, ml_weight: float = 0.5):
-        if not math.isfinite(ml_weight) or not 0.0 <= ml_weight <= 1.0:
+        # A boolean threshold/weight is a dangerous configuration mistake:
+        # True silently becomes 1.0, which can suppress nearly all alerts.
+        # Reject nonnumeric settings explicitly rather than raising TypeError.
+        if (isinstance(ml_weight, bool) or not isinstance(ml_weight, (int, float))
+                or not math.isfinite(ml_weight) or not 0.0 <= ml_weight <= 1.0):
             raise ValueError("ml_weight must be a finite number between 0 and 1")
         self.ml_weight = ml_weight
         self.model: Pipeline | None = None
@@ -317,6 +321,7 @@ class PromptInjectionDetector:
         return max(blended, h * 0.85, m * 0.85)
 
     def is_injection(self, text: str, threshold: float = 0.5) -> bool:
-        if not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0:
+        if (isinstance(threshold, bool) or not isinstance(threshold, (int, float))
+                or not math.isfinite(threshold) or not 0.0 <= threshold <= 1.0):
             raise ValueError("threshold must be a finite number between 0 and 1")
         return self.score(text) >= threshold
