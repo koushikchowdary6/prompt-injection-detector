@@ -40,6 +40,8 @@ the regression suite covers attack examples and benign multilingual text.
 
 **Resource-safety contract:** inputs longer than 100,000 characters are rejected with `ValueError` before regex variant generation or ML vectorization. The limit is checked again after NFKC normalization, since compatibility characters can expand. This is an explicit rejection, not a claim that oversized inputs are malicious; callers should catch the error and apply their own fail-closed policy (for example, reject or quarantine the request rather than silently allowing it). The same limit applies to training and inference, and an invalid refit preserves the existing model.
 
+**Regex work budget:** the heuristic layer also caps the total characters scanned across separator interpretations at 2 million. A long prompt with multiple invisible separators can otherwise multiply regex work up to 256 times while remaining under the 100,000-character input cap. If that work budget is exceeded, the heuristic returns a conservative 0.7 suspicion score without running the expensive variants. This is a resource-safety fallback, **not** a confirmed attack classification; applications should calibrate thresholds and use additional defenses.
+
 **Training-data contract:** `fit(texts, labels)` requires aligned, nonempty text and both integer labels: `0` for benign and `1` for injection. Invalid or single-class data is rejected before fitting so `ml_score()` cannot silently interpret the wrong probability column. NumPy integer labels are supported for cross-validation; a failed refit leaves the previous model intact.
 
 This is the applied-security companion to my
