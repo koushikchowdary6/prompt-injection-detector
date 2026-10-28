@@ -51,6 +51,10 @@ _COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERN
 # Guardrail inputs are untrusted. In particular, up to 256 regex variants of
 # a long prompt would otherwise multiply memory use and scanning time.
 MAX_INPUT_CHARS = 100_000
+# Worst-case total characters passed to regex scans across all separator
+# interpretations. An input can be below MAX_INPUT_CHARS yet expand to
+# 256 full-length variants, multiplying CPU work on untrusted prompts.
+MAX_REGEX_SCAN_CHARS = 2_000_000
 
 
 def _bounded_nfkc(text: str) -> str:
@@ -176,6 +180,14 @@ def heuristic_score(text: str) -> float:
     pieces = ["".join(chars) for chars in segments]
     format_count = len(pieces) - 1
     if format_count > 8:
+        return 0.7
+    # Bound aggregate regex work, not only the number of variants. Eight
+    # hidden separators in a 100k-character prompt would otherwise trigger
+    # roughly 25 million characters of repeated regex scans *per pattern*.
+    # When inspection is too expensive, conservatively flag obfuscation
+    # rather than silently treating the text as benign.
+    variant_count = 1 << format_count
+    if (len(normalized) + format_count) * variant_count > MAX_REGEX_SCAN_CHARS:
         return 0.7
     candidates = (
         "".join(part + (separators[i] if i < format_count else "")
