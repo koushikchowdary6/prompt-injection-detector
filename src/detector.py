@@ -63,6 +63,12 @@ def _bounded_nfkc(text: str) -> str:
         raise ValueError("input must be a string")
     if len(text) > MAX_INPUT_CHARS:
         raise ValueError(f"input exceeds {MAX_INPUT_CHARS} characters")
+    # Lone UTF-16 surrogates are not valid Unicode scalar values. They can
+    # survive Python string normalization but fail later when a model client,
+    # logger, or JSON serializer encodes the prompt as UTF-8. Reject them at
+    # the shared input boundary, before either heuristic or ML scoring.
+    if any(unicodedata.category(char) == "Cs" for char in text):
+        raise ValueError("input contains invalid Unicode surrogate")
     # Untrusted retrieved HTML may encode attack instructions as character
     # references (e.g. &#73;gnore or &lt;|im_start|&gt;). Decode once,
     # consistently for heuristic and ML paths, before Unicode normalization.
@@ -78,6 +84,8 @@ def _bounded_nfkc(text: str) -> str:
     if len(decoded) > MAX_INPUT_CHARS:
         raise ValueError(f"decoded input exceeds {MAX_INPUT_CHARS} characters")
     normalized = unicodedata.normalize("NFKC", decoded)
+    if any(unicodedata.category(char) == "Cs" for char in normalized):
+        raise ValueError("normalized input contains invalid Unicode surrogate")
     if len(normalized) > MAX_INPUT_CHARS:
         raise ValueError(f"normalized input exceeds {MAX_INPUT_CHARS} characters")
     return normalized
