@@ -18,6 +18,25 @@ import examples
 from detector import PromptInjectionDetector, normalize_text
 
 
+def wilson_interval(successes: int, trials: int) -> list[float] | None:
+    """Approximate 95% binomial interval for a held-out error rate.
+
+    Returns None for undefined denominators. These pooled CV intervals are
+    descriptive; correlated folds and threshold tuning on the same data
+    invalidate claims of independent generalization confidence.
+    """
+    if not 0 <= successes <= trials:
+        raise ValueError("successes must be between zero and trials")
+    if trials == 0:
+        return None
+    z = 1.96
+    rate = successes / trials
+    denominator = 1 + z * z / trials
+    center = (rate + z * z / (2 * trials)) / denominator
+    half_width = z * math.sqrt(rate * (1 - rate) / trials + z * z / (4 * trials * trials)) / denominator
+    return [max(0.0, center - half_width), min(1.0, center + half_width)]
+
+
 def grouped_folds(texts, labels, n_splits=5, seed=0):
     """Keep equivalent prompts in the same fold to prevent train/test leakage.
 
@@ -148,11 +167,19 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
         summaries.append({
             "threshold": threshold,
             "accuracy": (tp + tn) / support,
+            # A majority-benign dataset can yield high raw accuracy even if
+            # every attack is missed. Average per-class recall instead.
+            "balanced_accuracy": ((tp / (tp + fn) + tn / (tn + fp)) / 2
+                                  if (tp + fn) and (tn + fp) else None),
+            "positive_support": int(tp + fn),
+            "negative_support": int(tn + fp),
             "precision": precision,
             "recall": recall,
             "f1": f1,
             "false_positive_rate": fp / (fp + tn) if fp + tn else None,
             "false_negative_rate": fn / (fn + tp) if fn + tp else None,
+            "false_positive_rate_ci95": wilson_interval(fp, fp + tn),
+            "false_negative_rate_ci95": wilson_interval(fn, fn + tp),
             "support": support,
             "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
         })
@@ -178,10 +205,11 @@ if __name__ == "__main__":
         parser.error(str(exc))
     if len(summaries) > 1:
         print("Grouped CV threshold sweep (descriptive, not independently validated):")
-        print("  threshold  F1     FPR    FNR    TP/FP/TN/FN")
+        print("  threshold  F1     BAcc   FPR    FNR    TP/FP/TN/FN")
         for item in summaries:
             counts = item["confusion_matrix"]
             print(f"  {item['threshold']:.3f}      {item['f1']:.3f}  "
+                  f"{item['balanced_accuracy']:.3f}  "
                   f"{item['false_positive_rate']:.3f}  "
                   f"{item['false_negative_rate']:.3f}  "
                   f"{counts['tp']}/{counts['fp']}/{counts['tn']}/{counts['fn']}")
@@ -191,6 +219,8 @@ if __name__ == "__main__":
     print("5-fold cross-validation on the labeled example set:")
     print(f"  threshold: {m['threshold']:.3f}")
     print(f"  accuracy : {m['accuracy']:.3f}")
+    print(f"  bal. acc.: {m['balanced_accuracy']:.3f}" if m["balanced_accuracy"] is not None
+          else "  bal. acc.: n/a (one class absent)")
     print(f"  precision: {m['precision']:.3f}")
     print(f"  recall   : {m['recall']:.3f}")
     print(f"  F1       : {m['f1']:.3f}")
