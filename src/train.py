@@ -42,6 +42,18 @@ def wilson_interval(successes: int, trials: int) -> list[float] | None:
     return [max(0.0, center - half_width), min(1.0, center + half_width)]
 
 
+
+def matthews_correlation(tp: int, fp: int, tn: int, fn: int) -> float | None:
+    """MCC from held-out confusion counts; undefined for a zero denominator.
+
+    Unlike raw accuracy, MCC uses all four confusion cells and highlights
+    imbalanced or inverted predictions. It is not a calibration measure.
+    """
+    numerator = tp * tn - fp * fn
+    denominator = math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
+    return numerator / denominator if denominator else None
+
+
 def grouped_folds(texts, labels, n_splits=5, seed=0):
     """Keep equivalent prompts in the same fold to prevent train/test leakage.
 
@@ -190,6 +202,7 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
             "precision": precision,
             "recall": recall,
             "f1": f1,
+            "mcc": matthews_correlation(tp, fp, tn, fn),
             "false_positive_rate": fp / (fp + tn) if fp + tn else None,
             "false_negative_rate": fn / (fn + tp) if fn + tp else None,
             "false_positive_rate_ci95": wilson_interval(fp, fp + tn),
@@ -219,11 +232,12 @@ if __name__ == "__main__":
         parser.error(str(exc))
     if len(summaries) > 1:
         print("Grouped CV threshold sweep (descriptive, not independently validated):")
-        print("  threshold  F1     BAcc   FPR    FNR    TP/FP/TN/FN")
+        print("  threshold  F1     BAcc    MCC    FPR    FNR    TP/FP/TN/FN")
         for item in summaries:
             counts = item["confusion_matrix"]
+            mcc = f"{item['mcc']:.3f}" if item["mcc"] is not None else "n/a"
             print(f"  {item['threshold']:.3f}      {item['f1']:.3f}  "
-                  f"{item['balanced_accuracy']:.3f}  "
+                  f"{item['balanced_accuracy']:.3f}  {mcc:>5}  "
                   f"{item['false_positive_rate']:.3f}  "
                   f"{item['false_negative_rate']:.3f}  "
                   f"{counts['tp']}/{counts['fp']}/{counts['tn']}/{counts['fn']}")
@@ -238,6 +252,8 @@ if __name__ == "__main__":
     print(f"  precision: {m['precision']:.3f}")
     print(f"  recall   : {m['recall']:.3f}")
     print(f"  F1       : {m['f1']:.3f}")
+    print(f"  MCC      : {m['mcc']:.3f}" if m["mcc"] is not None
+          else "  MCC      : n/a (degenerate prediction or class support)")
     print(f"  FPR      : {m['false_positive_rate']:.3f}" if m['false_positive_rate'] is not None
           else "  FPR      : n/a (no benign samples)")
     print(f"  FNR      : {m['false_negative_rate']:.3f}" if m['false_negative_rate'] is not None
