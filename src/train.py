@@ -4,7 +4,7 @@ from __future__ import annotations
 import argparse
 import math
 import sys
-from numbers import Integral
+from numbers import Integral, Real
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -144,7 +144,8 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
                 # bool is an int subclass in Python. Treating True/False as
                 # 1.0/0.0 would silently turn a detector's binary decision
                 # into an apparently calibrated risk score during CV.
-                if (isinstance(score, bool) or not isinstance(score, (int, float))
+                if (isinstance(score, (bool, np.bool_))
+                        or not isinstance(score, (Real, np.integer))
                         or not math.isfinite(score) or not 0.0 <= score <= 1.0):
                     raise ValueError("detector returned an invalid risk score")
                 decisions = {threshold: int(score >= threshold) for threshold in thresholds}
