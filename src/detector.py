@@ -20,7 +20,7 @@ import math
 import re
 from itertools import product
 import unicodedata
-from numbers import Integral
+from numbers import Integral, Real
 from urllib.parse import unquote
 
 import numpy as np
@@ -300,10 +300,17 @@ class PromptInjectionDetector:
                     or not np.array_equal(labels, [0, 1])):
                 raise ValueError("model classes must be ordered as [0, 1]")
         try:
-            probabilities = np.asarray(
-                self.model.predict_proba([normalized]), dtype=float
-            )
-        except (TypeError, ValueError) as exc:
+            # Inspect the original scalar types before coercing to float.
+            # NumPy converts True/False and numeric strings into 1.0/0.0,
+            # allowing a malformed classifier to look like valid confidence.
+            raw = np.asarray(self.model.predict_proba([normalized]), dtype=object)
+            if raw.shape != (1, 2) or any(
+                isinstance(value, (bool, np.bool_)) or not isinstance(value, Real)
+                for value in raw.flat
+            ):
+                raise ValueError("non-numeric or boolean probability")
+            probabilities = np.asarray(raw, dtype=float)
+        except (TypeError, ValueError, OverflowError) as exc:
             raise ValueError("model returned invalid class probabilities") from exc
         if (
             probabilities.shape != (1, 2)
