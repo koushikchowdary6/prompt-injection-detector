@@ -136,8 +136,11 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
             # doubles without changing the public evaluate() contract.
             if callable(getattr(det, "score", None)):
                 score = det.score(texts[i])
-                if (not isinstance(score, (int, float)) or not math.isfinite(score)
-                        or not 0.0 <= score <= 1.0):
+                # bool is an int subclass in Python. Treating True/False as
+                # 1.0/0.0 would silently turn a detector's binary decision
+                # into an apparently calibrated risk score during CV.
+                if (isinstance(score, bool) or not isinstance(score, (int, float))
+                        or not math.isfinite(score) or not 0.0 <= score <= 1.0):
                     raise ValueError("detector returned an invalid risk score")
                 decisions = {threshold: int(score >= threshold) for threshold in thresholds}
             else:
