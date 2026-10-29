@@ -195,7 +195,11 @@ def heuristic_score(text: str) -> float:
     # When inspection is too expensive, conservatively flag obfuscation
     # rather than silently treating the text as benign.
     variant_count = 1 << format_count
-    if (len(normalized) + format_count) * variant_count > MAX_REGEX_SCAN_CHARS:
+    # Each candidate is scanned against every compiled pattern, not just
+    # once. Count the full worst-case work; the old bound underestimated
+    # actual regex input by the number of patterns (13 by default).
+    if ((len(normalized) + format_count) * variant_count * len(_COMPILED)
+            > MAX_REGEX_SCAN_CHARS):
         return 0.7
     candidates = (
         "".join(part + (separators[i] if i < format_count else "")
