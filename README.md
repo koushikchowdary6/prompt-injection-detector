@@ -80,6 +80,14 @@ independent deployment confidence: CV folds share training data, and tuning a
 threshold on these same examples introduces selection bias. A zero observed
 error rate with a small class support still has a nonzero Wilson upper bound.
 
+The report also includes the **Matthews correlation coefficient (MCC)**,
+computed from pooled held-out TP/FP/TN/FN counts. MCC uses all four confusion
+cells and ranges from -1 (inverse predictions) through 0 (no correlation) to
++1 (perfect predictions). It is null / n/a when a denominator is zero,
+such as when the detector predicts only one class; this must not be
+interpreted as perfect or zero correlation. MCC is descriptive on this
+same small grouped-CV dataset, not an unbiased generalization estimate.
+
 The displayed scores are **risk scores, not calibrated probabilities**. Choosing
 a threshold based on this same sweep is exploratory: validate the chosen
 threshold on a separate, representative holdout before deployment. Neither
