@@ -49,9 +49,22 @@ def matthews_correlation(tp: int, fp: int, tn: int, fn: int) -> float | None:
     Unlike raw accuracy, MCC uses all four confusion cells and highlights
     imbalanced or inverted predictions. It is not a calibration measure.
     """
-    numerator = tp * tn - fp * fn
-    denominator = math.sqrt((tp + fp) * (tp + fn) * (tn + fp) * (tn + fn))
-    return numerator / denominator if denominator else None
+    counts = (tp, fp, tn, fn)
+    # Confusion cells are observations, not probabilities. In particular,
+    # bool and fractional values can otherwise produce plausible MCC scores.
+    if any(isinstance(count, (bool, np.bool_)) or not isinstance(count, Integral)
+           or count < 0 for count in counts):
+        raise ValueError("MCC requires nonnegative integer confusion counts")
+    if not any(counts):
+        return None
+    # Normalize before multiplying. Integer products can be arbitrarily
+    # large, and math.sqrt(int_product) may overflow during float conversion.
+    # The MCC ratio is scale invariant, so this also preserves large-count
+    # diagnostic reports without sacrificing ordinary small-count results.
+    scale = max(counts)
+    a, b, c, d = (count / scale for count in counts)
+    denominator = math.sqrt((a + b) * (a + d) * (c + b) * (c + d))
+    return (a * c - b * d) / denominator if denominator else None
 
 
 def grouped_folds(texts, labels, n_splits=5, seed=0):
