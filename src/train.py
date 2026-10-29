@@ -149,10 +149,15 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
                     raise ValueError("detector returned an invalid risk score")
                 decisions = {threshold: int(score >= threshold) for threshold in thresholds}
             else:
-                decisions = {
-                    threshold: int(det.is_injection(texts[i], threshold=threshold))
-                    for threshold in thresholds
-                }
+                # Some adapters expose only a binary decision API. Do not
+                # coerce arbitrary truthy objects (e.g. "False", 2, or None)
+                # into held-out predictions; that would corrupt FPR/FNR.
+                decisions = {}
+                for threshold in thresholds:
+                    decision = det.is_injection(texts[i], threshold=threshold)
+                    if not isinstance(decision, (bool, np.bool_)):
+                        raise ValueError("detector returned an invalid binary decision")
+                    decisions[threshold] = int(decision)
             for threshold, prediction in decisions.items():
                 predictions[threshold][i] = prediction
 
