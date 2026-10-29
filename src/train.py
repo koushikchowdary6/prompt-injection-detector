@@ -25,8 +25,13 @@ def wilson_interval(successes: int, trials: int) -> list[float] | None:
     descriptive; correlated folds and threshold tuning on the same data
     invalidate claims of independent generalization confidence.
     """
-    if not 0 <= successes <= trials:
-        raise ValueError("successes must be between zero and trials")
+    # Binomial confidence intervals require actual event/sample counts.
+    # bool is an int subclass, while fractional counts produce plausible but
+    # meaningless intervals; reject both rather than publishing bad metrics.
+    if (isinstance(successes, bool) or not isinstance(successes, Integral)
+            or isinstance(trials, bool) or not isinstance(trials, Integral)
+            or not 0 <= successes <= trials):
+        raise ValueError("successes and trials must be nonnegative integer counts with successes <= trials")
     if trials == 0:
         return None
     z = 1.96
