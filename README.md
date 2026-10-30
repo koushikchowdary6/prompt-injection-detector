@@ -66,7 +66,17 @@ retraining the model separately for each threshold:
 python src/train.py --thresholds 0.3 0.5 0.7
 # Or inspect one chosen threshold:
 python src/train.py --threshold 0.6
+# Machine-readable grouped-CV metrics for a dashboard or CI artifact:
+python src/train.py --json --thresholds 0.3 0.5 0.7 > grouped-cv.json
 ```
+
+The `--json` mode emits only one JSON object with `evaluation`, `folds`,
+`threshold_selection`, `risk_scores_calibrated`, and `results`. Each result
+contains the same pooled confusion counts, class supports, F1, MCC, balanced
+accuracy, FPR/FNR, and Wilson intervals as the Python evaluator. The CLI skips
+the interactive fresh-example demo in this mode, so the output can be parsed
+without stripping human-readable lines. These are **descriptive grouped-CV
+metrics**, not calibrated probabilities or an independent deployment benchmark.
 
 The sweep trains once per group-disjoint fold, scores each held-out prompt once,
 and pools TP/FP/TN/FN counts at each threshold. It checks for overlapping or
