@@ -57,20 +57,23 @@ MAX_INPUT_CHARS = 100_000
 MAX_REGEX_SCAN_CHARS = 2_000_000
 
 
-def _decode_ascii_unicode_escapes(text: str) -> str:
-    """Decode one layer of JSON-style ASCII escapes in untrusted text.
+def _decode_ascii_character_escapes(text: str) -> str:
+    r"""Decode one printable-ASCII layer of \uXXXX and \xHH escapes.
 
-    A literal \\u006E can conceal the 'n' in 'ignore'. Only printable ASCII
-    escapes are decoded: non-ASCII escapes, surrogates, and control escapes
-    remain literal. Do not recursively decode or reinterpret doubled
-    backslashes used to document code snippets.
+    JSON uses \uXXXX; JavaScript/Python snippets and logs can also contain
+    \xHH. Decode both formats in a *single* regex pass so an escape that
+    creates another escape is never interpreted recursively. Control bytes,
+    non-ASCII escapes and doubled backslashes remain literal.
     """
     def replace(match):
-        codepoint = int(match.group(1), 16)
+        codepoint = int(match.group(1) or match.group(2), 16)
         return chr(codepoint) if 0x20 <= codepoint <= 0x7E else match.group(0)
 
-    return re.sub(r"(?<!\\)\\u([0-9a-fA-F]{4})", replace, text)
-
+    return re.sub(
+        r"(?<!\\)\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2}))",
+        replace,
+        text,
+    )
 
 def _bounded_nfkc(text: str) -> str:
     """Reject oversized inputs before and after Unicode compatibility expansion."""
@@ -103,10 +106,10 @@ def _bounded_nfkc(text: str) -> str:
         raise ValueError("input contains invalid UTF-8 percent encoding") from exc
     if decoded != html_decoded:
         decoded = html.unescape(decoded)
-    # JSON-style ASCII escapes in retrieved logs/JSON can hide keywords and
-    # role delimiters. Decode only one printable-ASCII layer, without
-    # interpreting Unicode surrogate or control escape sequences.
-    decoded = _decode_ascii_unicode_escapes(decoded)
+    # JSON-style Unicode and JavaScript/Python hex escapes in retrieved
+    # logs/code can hide keywords and role delimiters. Decode one
+    # printable-ASCII layer without interpreting control bytes.
+    decoded = _decode_ascii_character_escapes(decoded)
     if len(decoded) > MAX_INPUT_CHARS:
         raise ValueError(f"decoded input exceeds {MAX_INPUT_CHARS} characters")
     normalized = unicodedata.normalize("NFKC", decoded)

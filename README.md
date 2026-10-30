@@ -40,6 +40,16 @@ recursively encoded escape sequences are not interpreted. Decoding can also
 change features in benign code examples, so this is targeted pattern coverage,
 **not** complete JSON parsing or a guarantee against prompt injection.
 
+**Hex-escaped instruction obfuscation:** The same single-pass decoder also
+recognizes printable ASCII `\xHH` escapes found in JavaScript/Python snippets
+and logs (for example, `\x69gnore previous instructions`). It can flag
+selected hex-obfuscated role delimiters and override phrases, including a
+percent-encoded wrapper. Decoding never recursively interprets escapes that
+create new escapes, and it leaves doubled backslashes, control bytes, and
+non-ASCII escapes literal. Ordinary code samples may be affected, so evaluate
+false positives for your application; this is targeted coverage, not a
+complete parser or comprehensive injection defense.
+
 **Mixed-script keyword spoofing:** The heuristic and ML input paths normalize a
 small set of Greek/Cyrillic lookalikes *only inside words that also contain
 ASCII letters*. This catches attacks such as `ignоre previous instructions`
