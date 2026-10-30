@@ -58,7 +58,7 @@ MAX_REGEX_SCAN_CHARS = 2_000_000
 
 
 def _decode_ascii_character_escapes(text: str) -> str:
-    """Decode one printable-ASCII layer of \uXXXX and \xHH escapes.
+    r"""Decode one printable-ASCII layer of \uXXXX and \xHH escapes.
 
     JSON uses \uXXXX; JavaScript/Python snippets and logs can also contain
     \xHH. Decode both formats in a *single* regex pass so an escape that
