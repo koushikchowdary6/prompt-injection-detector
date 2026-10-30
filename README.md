@@ -87,8 +87,13 @@ python src/train.py --threshold 0.6
 python src/train.py --json --thresholds 0.3 0.5 0.7 > grouped-cv.json
 ```
 
-The `--json` mode emits only one JSON object with `evaluation`, `folds`,
-`threshold_selection`, `risk_scores_calibrated`, and `results`. Each result
+The `--json` mode emits one JSON object with `evaluation`, `folds`,
+`threshold_selection`, `risk_scores_calibrated`, and `results`, plus a
+`dataset_sha256` fingerprint of the **ordered, normalized text/label pairs**,
+`dataset_sample_count`, `dataset_class_counts`, and `cv_seed`. The digest lets
+reviewers detect when a comparison used different examples or labels without
+printing the underlying prompts. It is not a signed audit record or an
+independent test-set result. Each result
 contains the same pooled confusion counts, class supports, F1, MCC, balanced
 accuracy, FPR/FNR, and Wilson intervals as the Python evaluator. The CLI skips
 the interactive fresh-example demo in this mode, so the output can be parsed
