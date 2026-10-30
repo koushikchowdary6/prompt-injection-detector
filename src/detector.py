@@ -181,7 +181,15 @@ def heuristic_score(text: str) -> float:
                 or normalized[index - 1] in "#*0123456789"
             )
         )
-        if _is_hidden_separator(char) and not (emoji_joiner or emoji_variation):
+        # U+0085 (NEXT LINE), U+2028 (LINE SEPARATOR), and U+2029
+        # (PARAGRAPH SEPARATOR) are legitimate line breaks, so preserve them
+        # for ML text features. For heuristic inspection only, also test the
+        # joined interpretation: an attacker can insert these rare breaks
+        # *inside* a keyword to evade literal regex rules.
+        ambiguous_line_break = char in ("\u0085", "\u2028", "\u2029")
+        if (_is_hidden_separator(char) or ambiguous_line_break) and not (
+            emoji_joiner or emoji_variation
+        ):
             segments.append([])
         else:
             segments[-1].append(char)
