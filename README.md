@@ -38,6 +38,14 @@ ASCII letters*. This catches attacks such as `ignоre previous instructions`
 sentences. It is a targeted defense, not full Unicode confusable detection;
 the regression suite covers attack examples and benign multilingual text.
 
+**Unicode line-break obfuscation:** The heuristic layer tests both joined and
+separated interpretations of U+0085 (NEXT LINE), U+2028 (LINE SEPARATOR), and
+U+2029 (PARAGRAPH SEPARATOR). These characters can split a keyword such as
+`ignore` while avoiding ordinary literal patterns. The ML normalization path
+preserves these genuine line boundaries; only heuristic matching considers
+joining them. This is conservative pattern matching and may produce false
+positives on unusual formatting, not complete Unicode spoofing protection.
+
 **Resource-safety contract:** unpaired UTF-16 surrogate code points are rejected with `ValueError` at the shared input boundary, before regex scans, training, or model inference. These malformed Python strings can otherwise fail during downstream UTF-8 serialization. Valid multilingual text and supplementary Unicode characters remain supported. Inputs longer than 100,000 characters are rejected with `ValueError` before regex variant generation or ML vectorization. The limit is checked again after NFKC normalization, since compatibility characters can expand. This is an explicit rejection, not a claim that oversized inputs are malicious; callers should catch the error and apply their own fail-closed policy (for example, reject or quarantine the request rather than silently allowing it). The same limit applies to training and inference, and an invalid refit preserves the existing model.
 
 **Regex work budget:** the heuristic layer also caps the total characters scanned across separator interpretations at 2 million. A long prompt with multiple invisible separators can otherwise multiply regex work up to 256 times while remaining under the 100,000-character input cap. If that work budget is exceeded, the heuristic returns a conservative 0.7 suspicion score without running the expensive variants. This is a resource-safety fallback, **not** a confirmed attack classification; applications should calibrate thresholds and use additional defenses.
