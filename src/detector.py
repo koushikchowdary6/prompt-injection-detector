@@ -58,19 +58,19 @@ MAX_REGEX_SCAN_CHARS = 2_000_000
 
 
 def _decode_ascii_character_escapes(text: str) -> str:
-    r"""Decode one printable-ASCII layer of \uXXXX and \xHH escapes.
+    r"""Decode one printable-ASCII layer of \uXXXX, \xHH, and JS \u{HH} escapes.
 
-    JSON uses \uXXXX; JavaScript/Python snippets and logs can also contain
+    JSON uses \uXXXX; JavaScript also supports \u{HH} codepoints, and logs can contain
     \xHH. Decode both formats in a *single* regex pass so an escape that
     creates another escape is never interpreted recursively. Control bytes,
     non-ASCII escapes and doubled backslashes remain literal.
     """
     def replace(match):
-        codepoint = int(match.group(1) or match.group(2), 16)
+        codepoint = int(match.group(1) or match.group(2) or match.group(3), 16)
         return chr(codepoint) if 0x20 <= codepoint <= 0x7E else match.group(0)
 
     return re.sub(
-        r"(?<!\\)\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2}))",
+        r"(?<!\\)\\(?:u([0-9a-fA-F]{4})|x([0-9a-fA-F]{2})|u\{([0-9a-fA-F]{1,6})\})",
         replace,
         text,
     )
@@ -106,7 +106,7 @@ def _bounded_nfkc(text: str) -> str:
         raise ValueError("input contains invalid UTF-8 percent encoding") from exc
     if decoded != html_decoded:
         decoded = html.unescape(decoded)
-    # JSON-style Unicode and JavaScript/Python hex escapes in retrieved
+    # JSON/JavaScript Unicode and Python hex escapes in retrieved
     # logs/code can hide keywords and role delimiters. Decode one
     # printable-ASCII layer without interpreting control bytes.
     decoded = _decode_ascii_character_escapes(decoded)
