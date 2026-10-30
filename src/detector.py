@@ -60,7 +60,7 @@ MAX_REGEX_SCAN_CHARS = 2_000_000
 def _decode_ascii_unicode_escapes(text: str) -> str:
     """Decode one layer of JSON-style ASCII escapes in untrusted text.
 
-    A literal \u006E can conceal the 'n' in 'ignore'. Only printable ASCII
+    A literal \\u006E can conceal the 'n' in 'ignore'. Only printable ASCII
     escapes are decoded: non-ASCII escapes, surrogates, and control escapes
     remain literal. Do not recursively decode or reinterpret doubled
     backslashes used to document code snippets.
