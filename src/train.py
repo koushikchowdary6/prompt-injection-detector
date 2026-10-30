@@ -239,7 +239,8 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
             "false_negative_rate": fn / (fn + tp) if fn + tp else None,
             "false_positive_rate_ci95": wilson_interval(fp, fp + tn),
             "false_negative_rate_ci95": wilson_interval(fn, fn + tp),
-            "support": support,
+            # CV labels are NumPy scalars; expose JSON-native integer counts.
+            "support": int(support),
             "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
         })
     return summaries
