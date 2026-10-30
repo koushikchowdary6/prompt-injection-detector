@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import math
 import sys
 from numbers import Integral, Real
@@ -238,7 +239,8 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
             "false_negative_rate": fn / (fn + tp) if fn + tp else None,
             "false_positive_rate_ci95": wilson_interval(fp, fp + tn),
             "false_negative_rate_ci95": wilson_interval(fn, fn + tp),
-            "support": support,
+            # CV labels are NumPy scalars; expose JSON-native integer counts.
+            "support": int(support),
             "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
         })
     return summaries
@@ -255,12 +257,26 @@ if __name__ == "__main__":
                         help="guardrail decision threshold from 0 to 1 (default: 0.5)")
     parser.add_argument("--thresholds", type=float, nargs="+", default=None,
                         help="evaluate multiple thresholds with one fit per CV fold")
+    parser.add_argument("--json", action="store_true",
+                        help="emit machine-readable grouped-CV metrics without demo output")
     args = parser.parse_args()
     try:
         summaries = (evaluate_thresholds(tuple(args.thresholds))
                      if args.thresholds is not None else [evaluate(threshold=args.threshold)])
     except ValueError as exc:
         parser.error(str(exc))
+    if args.json:
+        # Structured output for CI dashboards and reproducible comparisons.
+        # Keep the small, correlated CV dataset's limitations visible to
+        # downstream consumers instead of presenting these as deployment rates.
+        print(json.dumps({
+            "evaluation": "stratified_grouped_cross_validation",
+            "folds": 5,
+            "threshold_selection": "exploratory_same_folds",
+            "risk_scores_calibrated": False,
+            "results": summaries,
+        }, allow_nan=False))
+        raise SystemExit(0)
     if len(summaries) > 1:
         print("Grouped CV threshold sweep (descriptive, not independently validated):")
         print("  threshold  F1     BAcc    MCC    FPR    FNR    TP/FP/TN/FN")
