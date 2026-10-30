@@ -41,8 +41,8 @@ change features in benign code examples, so this is targeted pattern coverage,
 **not** complete JSON parsing or a guarantee against prompt injection.
 
 **Hex-escaped instruction obfuscation:** The same single-pass decoder also
-recognizes printable ASCII `\\xHH` escapes found in JavaScript/Python snippets
-and logs (for example, `\\x69gnore previous instructions`). It can flag
+recognizes printable ASCII `\xHH` escapes found in JavaScript/Python snippets
+and logs (for example, `\x69gnore previous instructions`). It can flag
 selected hex-obfuscated role delimiters and override phrases, including a
 percent-encoded wrapper. Decoding never recursively interprets escapes that
 create new escapes, and it leaves doubled backslashes, control bytes, and
