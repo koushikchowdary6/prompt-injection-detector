@@ -50,6 +50,14 @@ non-ASCII escapes literal. Ordinary code samples may be affected, so evaluate
 false positives for your application; this is targeted coverage, not a
 complete parser or comprehensive injection defense.
 
+**JavaScript Unicode codepoint escapes:** The same single-pass normalizer recognizes
+printable ASCII `\u{HH}` through `\u{HHHHHH}` syntax in retrieved
+JavaScript snippets and logs. Selected escaped role boundaries and override
+phrases are detectable in both heuristic and ML inputs. Controls, non-ASCII
+codepoints, invalid lengths, doubled backslashes and recursively escaped
+sequences remain literal. This is targeted obfuscation coverage, not a full
+JavaScript parser; ordinary code samples can produce false positives.
+
 **Mixed-script keyword spoofing:** The heuristic and ML input paths normalize a
 small set of Greek/Cyrillic lookalikes *only inside words that also contain
 ASCII letters*. This catches attacks such as `ignоre previous instructions`
