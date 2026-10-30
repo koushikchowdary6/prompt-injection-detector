@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import math
 import sys
@@ -141,7 +142,34 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
     return folds
 
 
-def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed: int = 0):
+def dataset_provenance(texts, labels):
+    """Fingerprint the ordered normalized examples and their binary labels.
+
+    The digest identifies the exact labeled dataset used for the descriptive
+    grouped-CV run without exposing raw prompts in machine-readable reports.
+    It is not a signature or a claim of independent test-set performance.
+    """
+    if len(texts) != len(labels):
+        raise ValueError("dataset texts and labels must be aligned")
+    if any(not isinstance(text, str) for text in texts):
+        raise ValueError("dataset texts must be strings")
+    if any(isinstance(label, bool) or not isinstance(label, Integral)
+           or label not in (0, 1) for label in labels):
+        raise ValueError("dataset labels must be binary integers")
+    rows = [[normalize_text(text), int(label)] for text, label in zip(texts, labels)]
+    canonical = json.dumps(rows, ensure_ascii=True, separators=(",", ":"), allow_nan=False)
+    return {
+        "dataset_sha256": hashlib.sha256(canonical.encode("utf-8")).hexdigest(),
+        "dataset_fingerprint_scope": "ordered_normalized_text_and_labels",
+        "dataset_sample_count": len(rows),
+        "dataset_class_counts": {
+            "benign": sum(label == 0 for _, label in rows),
+            "injection": sum(label == 1 for _, label in rows),
+        },
+    }
+
+
+def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed: int = 0, provenance=None):
     """Evaluate several thresholds on identical out-of-fold scores.
 
     Each training fold is fitted exactly once; no held-out prompt is used
@@ -243,6 +271,11 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
             "support": int(support),
             "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
         })
+    if provenance is not None:
+        if not isinstance(provenance, dict):
+            raise ValueError("provenance must be a dictionary")
+        provenance.update(dataset_provenance(texts, labels))
+        provenance["cv_seed"] = seed
     return summaries
 
 
@@ -260,9 +293,13 @@ if __name__ == "__main__":
     parser.add_argument("--json", action="store_true",
                         help="emit machine-readable grouped-CV metrics without demo output")
     args = parser.parse_args()
+    provenance = {}
     try:
-        summaries = (evaluate_thresholds(tuple(args.thresholds))
-                     if args.thresholds is not None else [evaluate(threshold=args.threshold)])
+        thresholds = (tuple(args.thresholds) if args.thresholds is not None
+                      else (args.threshold,))
+        summaries = evaluate_thresholds(
+            thresholds, provenance=provenance if args.json else None
+        )
     except ValueError as exc:
         parser.error(str(exc))
     if args.json:
@@ -274,6 +311,7 @@ if __name__ == "__main__":
             "folds": 5,
             "threshold_selection": "exploratory_same_folds",
             "risk_scores_calibrated": False,
+            **provenance,
             "results": summaries,
         }, allow_nan=False))
         raise SystemExit(0)
