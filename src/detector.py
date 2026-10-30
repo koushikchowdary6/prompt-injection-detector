@@ -77,10 +77,17 @@ def _bounded_nfkc(text: str) -> str:
     # privileged role delimiters. Decode exactly once, after HTML entities,
     # for consistent heuristic/ML features. Reject malformed UTF-8 rather
     # than silently replacing bytes and changing the security decision.
+    # A URL may percent-encode an HTML character reference itself:
+    # "%26%23x49%3Bgnore" becomes "&#x49;gnore" after URL decoding.
+    # Decode each representation at most once per layer, rather than
+    # recursively unescaping arbitrary HTML or percent encodings.
+    html_decoded = html.unescape(text)
     try:
-        decoded = unquote(html.unescape(text), encoding="utf-8", errors="strict")
+        decoded = unquote(html_decoded, encoding="utf-8", errors="strict")
     except UnicodeDecodeError as exc:
         raise ValueError("input contains invalid UTF-8 percent encoding") from exc
+    if decoded != html_decoded:
+        decoded = html.unescape(decoded)
     if len(decoded) > MAX_INPUT_CHARS:
         raise ValueError(f"decoded input exceeds {MAX_INPUT_CHARS} characters")
     normalized = unicodedata.normalize("NFKC", decoded)
