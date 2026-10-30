@@ -31,6 +31,15 @@ treat rejected input as untrusted rather than silently allowing it. This
 changes feature interpretation for percent-encoded benign text as well, so
 downstream systems should evaluate false positives on their own data.
 
+**JSON Unicode escape obfuscation:** A single layer of printable ASCII
+`\uXXXX` escapes is decoded in the shared heuristic/ML input path. This
+catches selected escaped instructions and privileged role delimiters in
+retrieved JSON or logs, including URL-wrapped escape sequences. Control,
+surrogate, and non-ASCII escapes are left literal; doubled backslashes and
+recursively encoded escape sequences are not interpreted. Decoding can also
+change features in benign code examples, so this is targeted pattern coverage,
+**not** complete JSON parsing or a guarantee against prompt injection.
+
 **Mixed-script keyword spoofing:** The heuristic and ML input paths normalize a
 small set of Greek/Cyrillic lookalikes *only inside words that also contain
 ASCII letters*. This catches attacks such as `ignоre previous instructions`
