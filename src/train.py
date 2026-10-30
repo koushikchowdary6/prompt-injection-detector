@@ -36,9 +36,16 @@ def wilson_interval(successes: int, trials: int) -> list[float] | None:
         return None
     z = 1.96
     rate = successes / trials
-    denominator = 1 + z * z / trials
-    center = (rate + z * z / (2 * trials)) / denominator
-    half_width = z * math.sqrt(rate * (1 - rate) / trials + z * z / (4 * trials * trials)) / denominator
+    # 1 / large_int is safe for arbitrarily large integer counts; float /
+    # large_int can raise OverflowError before an otherwise valid CI is
+    # computed. Use a reciprocal throughout the Wilson calculation.
+    inv_trials = 1 / trials
+    z2 = z * z
+    denominator = 1 + z2 * inv_trials
+    center = (rate + 0.5 * z2 * inv_trials) / denominator
+    half_width = z * math.sqrt(
+        rate * (1 - rate) * inv_trials + 0.25 * z2 * inv_trials * inv_trials
+    ) / denominator
     return [max(0.0, center - half_width), min(1.0, center + half_width)]
 
 
