@@ -39,3 +39,12 @@ def test_valid_counts_produce_bounded_intervals(successes, trials):
     lower, upper = wilson_interval(successes, trials)
     assert 0.0 <= lower <= upper <= 1.0
     assert lower <= successes / trials <= upper
+
+@pytest.mark.parametrize("successes_fraction", [0, 0.5, 1])
+def test_arbitrary_precision_counts_do_not_overflow_wilson_interval(successes_fraction):
+    trials = 10**400
+    successes = int(successes_fraction * 10) * (trials // 10)
+    lower, upper = wilson_interval(successes, trials)
+    assert 0.0 <= lower <= upper <= 1.0
+    assert lower == pytest.approx(successes_fraction)
+    assert upper == pytest.approx(successes_fraction)
