@@ -46,3 +46,19 @@ def test_numpy_numeric_adapter_scores_are_counted(monkeypatch, score):
 def test_invalid_numpy_adapter_scores_fail_closed(monkeypatch, score):
     with pytest.raises(ValueError, match="invalid risk score"):
         _run_with_score(monkeypatch, score)
+
+
+@pytest.mark.parametrize("score", [
+    10**400,
+    -(10**400),
+    np.uint64(2**64 - 1),
+    np.float64(np.finfo(np.float64).max),
+])
+def test_overflowing_or_out_of_range_adapter_scores_fail_as_validation_errors(
+    monkeypatch, score
+):
+    # A very large Python integer raises OverflowError in math.isfinite.
+    # A bad adapter must produce the same actionable validation failure as
+    # NaN, booleans, and ordinary out-of-range values, not crash the run.
+    with pytest.raises(ValueError, match="invalid risk score"):
+        _run_with_score(monkeypatch, score)
