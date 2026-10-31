@@ -18,7 +18,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data"))
 from sklearn.feature_extraction.text import TfidfVectorizer
 
 from detector import PromptInjectionDetector, normalize_text
-from train import dataset_provenance, wilson_interval
+from train import dataset_provenance, matthews_correlation, wilson_interval
 import examples
 
 MAX_HOLDOUT_BYTES = 2_000_000
@@ -121,6 +121,8 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
         "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
         "support": len(texts),
         "precision": precision,
+        "precision_ci95": wilson_interval(tp, tp + fp),
+        "mcc": matthews_correlation(tp, fp, tn, fn),
         "recall": recall,
         "f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0,
         "balanced_accuracy": (recall + tn / benign) / 2,
