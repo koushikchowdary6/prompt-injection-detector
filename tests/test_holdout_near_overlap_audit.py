@@ -27,7 +27,7 @@ def test_near_overlap_audit_does_not_inflate_disjoint_examples():
 
 def test_report_caps_example_row_numbers_but_keeps_exact_count():
     report = holdout._near_overlap_audit(
-        [("a", "b")], [("a", "b", "c")] * 25
+        [("a", "b", "c", "d")], [("a", "b", "c", "d", "e")] * 25
     )
     assert report["near_overlap_count"] == 25
     assert report["near_overlap_rows"] == list(range(1, 21))
