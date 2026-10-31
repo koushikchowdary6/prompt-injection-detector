@@ -202,7 +202,7 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8):
                         and best_prior is not None and index < best_prior)):
                 best_similarity, best_prior = similarity, index
         maximum_similarity = max(maximum_similarity, best_similarity)
-        if best_similarity >= threshold:
+        if best_prior is not None and best_similarity >= threshold:
             near_rows.append(row_number)
             if len(examples) < MAX_REPORTED_ERROR_ROWS_PER_CLASS:
                 examples.append({
