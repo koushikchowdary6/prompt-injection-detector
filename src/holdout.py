@@ -9,6 +9,8 @@ from __future__ import annotations
 import argparse
 import json
 import math
+import os
+import stat
 import sys
 from numbers import Integral
 
@@ -38,7 +40,23 @@ def _reject_duplicate_keys(pairs):
 
 def load_holdout(path: str | Path):
     """Read bounded JSONL rows with exactly text:str and label:int(0/1)."""
-    with open(path, "rb") as handle:
+    # A holdout is untrusted input: reject symlinks and special files before
+    # opening them. In particular, opening a FIFO without O_NONBLOCK can hang
+    # the evaluator indefinitely, while following a symlink can read a file
+    # outside the dataset selected by the experimenter.
+    source = Path(path)
+    metadata = source.lstat()
+    if not stat.S_ISREG(metadata.st_mode):
+        raise ValueError("holdout must be a regular file, not a symlink or special file")
+    if metadata.st_size > MAX_HOLDOUT_BYTES:
+        raise ValueError("holdout exceeds 2,000,000 bytes")
+    # Recheck the *opened descriptor* to avoid a path-swap between lstat and
+    # open. O_NOFOLLOW prevents a replacement symlink on supporting systems;
+    # O_NONBLOCK prevents a swapped FIFO from blocking before fstat rejects it.
+    flags = os.O_RDONLY | getattr(os, "O_NONBLOCK", 0) | getattr(os, "O_NOFOLLOW", 0)
+    with os.fdopen(os.open(source, flags), "rb") as handle:
+        if not stat.S_ISREG(os.fstat(handle.fileno()).st_mode):
+            raise ValueError("holdout must be a regular file")
         raw = handle.read(MAX_HOLDOUT_BYTES + 1)
     if len(raw) > MAX_HOLDOUT_BYTES:
         raise ValueError("holdout exceeds 2,000,000 bytes")
