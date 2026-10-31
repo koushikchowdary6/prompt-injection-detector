@@ -113,7 +113,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
     return {
         "evaluation": "user_supplied_disjoint_holdout",
         "independent_collection_verified": False,
-        "threshold_selected_on_holdout": False,
+        "threshold_preselection_verified": False,
         "risk_scores_calibrated": False,
         "threshold": threshold,
         "training": dataset_provenance(training_texts, training_labels),
