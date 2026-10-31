@@ -267,7 +267,11 @@ confusion-matrix denominator is zero; the precision interval is JSON `null`
 when there are no predicted positives. These metrics expose class imbalance
 and small-sample uncertainty, not calibrated model confidence. It rejects malformed JSONL, duplicate
 holdout examples, and training/holdout overlap under the same TF-IDF feature
-representation used for training. It also rejects conflicting labels on
+representation used for training. The `training_duplicate_audit` also reports
+feature-equivalent training rows, duplicate groups, and the largest repeated
+group without exposing prompts. Such repeated examples can overweight some
+training patterns; the report does not automatically deduplicate or prove
+sampling independence. It also rejects conflicting labels on
 feature-equivalent training examples and refuses non-boolean detector decisions
 rather than silently coercing them into confusion-matrix counts. It never
 optimizes the threshold using holdout labels or prints raw prompts in the report.
