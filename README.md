@@ -238,6 +238,11 @@ prompt, for example:
 ```
 
 Run `python src/holdout.py --holdout path/to/external.jsonl --threshold 0.5`.
+The loader accepts only regular UTF-8 files up to 2,000,000 bytes. It rejects
+symlinks, directories, FIFOs and other special files before parsing, with
+opened-descriptor checks and no-follow/nonblocking flags where supported.
+This prevents accidental traversal outside the chosen dataset and avoids
+indefinite reads from named pipes; it does not authenticate dataset provenance.
 The script fits on the repository's training examples only and reports a
 confusion matrix, FPR/FNR, balanced accuracy, F1, Matthews correlation
 coefficient (`mcc`), a 95% Wilson precision interval (`precision_ci95`),
