@@ -113,7 +113,12 @@ reviewers detect when a comparison used different examples or labels without
 printing the underlying prompts. It is not a signed audit record or an
 independent test-set result. Each result
 contains the same pooled confusion counts, class supports, F1, MCC, balanced
-accuracy, FPR/FNR, and Wilson intervals as the Python evaluator. The CLI skips
+accuracy, FPR/FNR, and Wilson intervals as the Python evaluator. Each threshold
+also includes `fold_diagnostics` with held-out support, class counts, confusion
+matrix, and FPR/FNR for each group-disjoint fold. These make concentrated
+false alarms or missed attacks visible even when pooled metrics look strong.
+Fold rates are descriptive and can be unstable with small class counts; they
+are not independent deployment-performance estimates. The CLI skips
 the interactive fresh-example demo in this mode, so the output can be parsed
 without stripping human-readable lines. These are **descriptive grouped-CV
 metrics**, not calibrated probabilities or an independent deployment benchmark.

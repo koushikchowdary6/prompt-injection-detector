@@ -190,7 +190,9 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
     # partition prevents accidental double counting if a custom splitter
     # yields overlapping or incomplete held-out folds.
     predictions = {threshold: {} for threshold in thresholds}
+    heldout_by_fold = []
     for tr, te in folds:
+        heldout_by_fold.append([int(index) for index in te])
         det = PromptInjectionDetector(ml_weight=ml_weight)
         det.fit(list(texts[tr]), list(labels[tr]))
         for index in te:
@@ -250,6 +252,28 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
         precision = tp / (tp + fp) if tp + fp else 0.0
         recall = tp / (tp + fn) if tp + fn else 0.0
         f1 = 2 * precision * recall / (precision + recall) if precision + recall else 0.0
+        # Preserve fold-level error evidence. Pooled rates alone can hide a
+        # failure concentrated in one held-out partition, especially when
+        # grouped folds have uneven class support.
+        fold_details = []
+        for fold_number, indices in enumerate(heldout_by_fold, start=1):
+            fold_tp = sum(int(predictions[threshold][i] == 1 and labels[i] == 1) for i in indices)
+            fold_fp = sum(int(predictions[threshold][i] == 1 and labels[i] == 0) for i in indices)
+            fold_tn = sum(int(predictions[threshold][i] == 0 and labels[i] == 0) for i in indices)
+            fold_fn = sum(int(predictions[threshold][i] == 0 and labels[i] == 1) for i in indices)
+            benign = fold_tn + fold_fp
+            attacks = fold_tp + fold_fn
+            fold_details.append({
+                "fold": fold_number,
+                "support": len(indices),
+                "positive_support": attacks,
+                "negative_support": benign,
+                "false_positive_rate": fold_fp / benign if benign else None,
+                "false_negative_rate": fold_fn / attacks if attacks else None,
+                "confusion_matrix": {
+                    "tp": fold_tp, "fp": fold_fp, "tn": fold_tn, "fn": fold_fn,
+                },
+            })
         summaries.append({
             "threshold": threshold,
             "accuracy": (tp + tn) / support,
@@ -270,6 +294,7 @@ def evaluate_thresholds(thresholds=(0.3, 0.5, 0.7), ml_weight: float = 0.5, seed
             # CV labels are NumPy scalars; expose JSON-native integer counts.
             "support": int(support),
             "confusion_matrix": {"tp": int(tp), "fp": int(fp), "tn": int(tn), "fn": int(fn)},
+            "fold_diagnostics": fold_details,
         })
     if provenance is not None:
         if not isinstance(provenance, dict):
