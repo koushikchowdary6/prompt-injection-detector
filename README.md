@@ -238,6 +238,22 @@ prompt, for example:
 ```
 
 Run `python src/holdout.py --holdout path/to/external.jsonl --threshold 0.5`.
+
+For a stricter frozen holdout gate, use:
+
+```bash
+python src/holdout.py --holdout path/to/external.jsonl --threshold 0.5 --reject-near-overlap
+```
+
+This optional mode rejects the entire evaluation **before fitting** if any
+holdout row reaches a Jaccard similarity of **0.8 or higher** against a
+training row, using sets of normalized TF-IDF unigram/bigram features. The
+default remains report-only, with exact near-overlap counts and bounded row
+references in `feature_overlap_audit`; the report also records the selected
+`policy`. The strict flag is a conservative lexical leakage screen, not
+semantic deduplication, a guarantee of independent data collection, or proof
+that a model will generalize. Fix the dataset rather than changing the
+threshold to make a failing benchmark pass.
 The loader accepts only regular UTF-8 files up to 2,000,000 bytes. It rejects
 symlinks, directories, FIFOs and other special files before parsing, with
 opened-descriptor checks and no-follow/nonblocking flags where supported.
