@@ -129,6 +129,51 @@ def _feature_keys(texts):
     return keys
 
 
+
+def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8):
+    """Audit high lexical similarity without claiming independent collection.
+
+    Jaccard similarity is computed over *sets* of the same normalized
+    unigram/bigram TF-IDF features used by the classifier. A token-to-training
+    inverted index avoids comparing disjoint examples. This is a screening
+    diagnostic, not a semantic similarity model or a data-independence proof.
+    """
+    training_sets = [set(key) for key in training_keys]
+    postings = {}
+    for index, features in enumerate(training_sets):
+        for feature in features:
+            postings.setdefault(feature, set()).add(index)
+
+    near_rows = []
+    maximum_similarity = 0.0
+    for row_number, key in enumerate(holdout_keys, 1):
+        features = set(key)
+        candidate_ids = set()
+        for feature in features:
+            candidate_ids.update(postings.get(feature, ()))
+        best = max((
+            len(features & training_sets[index])
+            / len(features | training_sets[index])
+            for index in candidate_ids
+        ), default=0.0)
+        maximum_similarity = max(maximum_similarity, best)
+        if best >= threshold:
+            near_rows.append(row_number)
+    return {
+        "method": "jaccard_normalized_tfidf_unigram_bigram_feature_sets",
+        "threshold": threshold,
+        "near_overlap_count": len(near_rows),
+        "near_overlap_rows": near_rows[:MAX_REPORTED_ERROR_ROWS_PER_CLASS],
+        "near_overlap_rows_omitted": max(
+            0, len(near_rows) - MAX_REPORTED_ERROR_ROWS_PER_CLASS
+        ),
+        "maximum_similarity": maximum_similarity,
+        "raw_prompt_text_included": False,
+        "independent_collection_verified": False,
+        "note": "Heuristic lexical near-overlap, not proof of leakage or independent sampling.",
+    }
+
+
 def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categories=None):
     """Fit on training examples only, score each disjoint holdout item once."""
     if (type(threshold) not in (int, float) or not math.isfinite(threshold)
@@ -164,6 +209,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         raise ValueError("holdout contains feature-equivalent duplicate prompts")
     if set(training_keys).intersection(holdout_keys):
         raise ValueError("holdout overlaps training data under TF-IDF normalization")
+    overlap_audit = _near_overlap_audit(training_keys, holdout_keys)
 
     detector = PromptInjectionDetector().fit(training_texts, training_labels)
     tp = fp = tn = fn = 0
@@ -257,6 +303,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         "threshold": threshold,
         "training": dataset_provenance(training_texts, training_labels),
         "holdout": dataset_provenance(texts, labels),
+        "feature_overlap_audit": overlap_audit,
         "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
         "category_breakdown": category_breakdown,
         "error_audit": {
