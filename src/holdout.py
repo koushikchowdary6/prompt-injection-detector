@@ -10,6 +10,7 @@ import argparse
 import json
 import math
 import os
+import re
 import stat
 import sys
 from numbers import Integral
@@ -28,6 +29,8 @@ import examples
 
 MAX_HOLDOUT_BYTES = 2_000_000
 MAX_REPORTED_ERROR_ROWS_PER_CLASS = 20
+MAX_HOLDOUT_CATEGORIES = 20
+_CATEGORY = re.compile(r"[a-z][a-z0-9_-]{0,39}")
 
 
 def _reject_duplicate_keys(pairs):
@@ -39,8 +42,8 @@ def _reject_duplicate_keys(pairs):
     return result
 
 
-def load_holdout(path: str | Path):
-    """Read bounded JSONL rows with exactly text:str and label:int(0/1)."""
+def load_holdout(path: str | Path, *, with_categories=False):
+    """Read bounded JSONL; optionally return validated tactic category labels."""
     # A holdout is untrusted input: reject symlinks and special files before
     # opening them. In particular, opening a FIFO without O_NONBLOCK can hang
     # the evaluator indefinitely, while following a symlink can read a file
@@ -71,7 +74,8 @@ def load_holdout(path: str | Path):
     lines = decoded.split("\n")
     if lines[-1] == "":
         lines.pop()  # One conventional terminal LF is not an empty record.
-    texts, labels = [], []
+    texts, labels, categories = [], [], []
+    category_mode = None
     for number, line in enumerate(lines, 1):
         if not line.strip():
             raise ValueError(f"holdout line {number}: empty row")
@@ -84,15 +88,30 @@ def load_holdout(path: str | Path):
             )
         except (ValueError, TypeError) as exc:
             raise ValueError(f"holdout line {number}: invalid JSON: {exc}") from exc
-        if (not isinstance(row, dict) or set(row) != {"text", "label"}
+        if (not isinstance(row, dict)
+                or set(row) not in ({"text", "label"}, {"text", "label", "category"})
                 or not isinstance(row["text"], str)
                 or not row["text"].strip()
                 or type(row["label"]) is not int or row["label"] not in (0, 1)):
             raise ValueError(f"holdout line {number}: expected text and binary integer label")
+        has_category = "category" in row
+        if category_mode is None:
+            category_mode = has_category
+        elif category_mode != has_category:
+            raise ValueError("holdout categories must be supplied for every row or none")
+        if has_category:
+            category = row["category"]
+            if not isinstance(category, str) or not _CATEGORY.fullmatch(category):
+                raise ValueError(f"holdout line {number}: invalid category slug")
+            categories.append(category)
+            if len(set(categories)) > MAX_HOLDOUT_CATEGORIES:
+                raise ValueError("holdout exceeds category count limit")
         texts.append(row["text"])
         labels.append(row["label"])
     if set(labels) != {0, 1}:
         raise ValueError("holdout must include both benign and injection examples")
+    if with_categories:
+        return texts, labels, (categories if category_mode else None)
     return texts, labels
 
 
@@ -110,7 +129,7 @@ def _feature_keys(texts):
     return keys
 
 
-def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
+def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categories=None):
     """Fit on training examples only, score each disjoint holdout item once."""
     if (type(threshold) not in (int, float) or not math.isfinite(threshold)
             or not 0 <= threshold <= 1):
@@ -119,6 +138,12 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
             any(type(label) is not int or label not in (0, 1) for label in labels)
             or set(labels) != {0, 1}):
         raise ValueError("holdout requires aligned examples from both classes")
+    if categories is not None:
+        if (len(categories) != len(texts)
+                or any(not isinstance(category, str)
+                       or not _CATEGORY.fullmatch(category) for category in categories)
+                or len(set(categories)) > MAX_HOLDOUT_CATEGORIES):
+            raise ValueError("categories must be aligned, valid slugs with at most 20 groups")
     training_texts, training_labels = train_data if train_data is not None else examples.load()
     if (len(training_texts) != len(training_labels) or not training_texts
             or any(isinstance(label, bool) or not isinstance(label, Integral)
@@ -143,6 +168,11 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
     detector = PromptInjectionDetector().fit(training_texts, training_labels)
     tp = fp = tn = fn = 0
     false_positive_rows, false_negative_rows = [], []
+    category_cells = (
+        {category: {"tp": 0, "fp": 0, "tn": 0, "fn": 0}
+         for category in sorted(set(categories))}
+        if categories is not None else None
+    )
     for row_number, (text, actual) in enumerate(zip(texts, labels), 1):
         raw_prediction = detector.is_injection(text, threshold=threshold)
         # Never coerce arbitrary numeric/string values to 0 or 1: an
@@ -155,6 +185,11 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
         fp += int(prediction == 1 and actual == 0)
         tn += int(prediction == 0 and actual == 0)
         fn += int(prediction == 0 and actual == 1)
+        if category_cells is not None:
+            cell = ("tp" if prediction == 1 and actual == 1
+                    else "fp" if prediction == 1 else
+                    "fn" if actual == 1 else "tn")
+            category_cells[categories[row_number - 1]][cell] += 1
         # Refer back to the supplied JSONL without publishing prompt text.
         # Bound the error examples in large holdouts; totals remain exact.
         if prediction == 1 and actual == 0:
@@ -163,6 +198,25 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
         elif prediction == 0 and actual == 1:
             if len(false_negative_rows) < MAX_REPORTED_ERROR_ROWS_PER_CLASS:
                 false_negative_rows.append(row_number)
+    category_breakdown = None
+    if category_cells is not None:
+        category_breakdown = {
+            "scope": "user_supplied_categories_exploratory_not_independent",
+            "groups": {},
+        }
+        for category, counts in category_cells.items():
+            category_benign = counts["fp"] + counts["tn"]
+            category_attacks = counts["tp"] + counts["fn"]
+            category_breakdown["groups"][category] = {
+                "support": category_benign + category_attacks,
+                "confusion_matrix": counts,
+                "false_positive_rate": (
+                    counts["fp"] / category_benign if category_benign else None
+                ),
+                "false_negative_rate": (
+                    counts["fn"] / category_attacks if category_attacks else None
+                ),
+            }
     benign, attacks = fp + tn, tp + fn
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / attacks
@@ -175,6 +229,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
         "training": dataset_provenance(training_texts, training_labels),
         "holdout": dataset_provenance(texts, labels),
         "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+        "category_breakdown": category_breakdown,
         "error_audit": {
             "row_numbering": "one_based_holdout_input_order",
             "max_rows_per_class": MAX_REPORTED_ERROR_ROWS_PER_CLASS,
@@ -206,8 +261,10 @@ def main(argv=None):
     parser.add_argument("--threshold", type=float, default=0.5)
     args = parser.parse_args(argv)
     try:
-        texts, labels = load_holdout(args.holdout)
-        report = evaluate_holdout(texts, labels, threshold=args.threshold)
+        texts, labels, categories = load_holdout(args.holdout, with_categories=True)
+        report = evaluate_holdout(
+            texts, labels, threshold=args.threshold, categories=categories
+        )
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
     print(json.dumps(report, allow_nan=False, sort_keys=True))
