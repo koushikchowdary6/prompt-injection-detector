@@ -10,6 +10,9 @@ import argparse
 import json
 import math
 import sys
+from numbers import Integral
+
+import numpy as np
 from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
@@ -92,17 +95,36 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
             or set(labels) != {0, 1}):
         raise ValueError("holdout requires aligned examples from both classes")
     training_texts, training_labels = train_data if train_data is not None else examples.load()
-    training_keys = set(_feature_keys(training_texts))
+    if (len(training_texts) != len(training_labels) or not training_texts
+            or any(isinstance(label, bool) or not isinstance(label, Integral)
+                   or label not in (0, 1) for label in training_labels)
+            or set(training_labels) != {0, 1}):
+        raise ValueError("training examples must be aligned and contain both binary classes")
+    # The training set is part of the evaluation contract, too. Opposite
+    # labels on feature-equivalent prompts make the fitted model and reported
+    # holdout scores ambiguous, even if the holdout itself is disjoint.
+    training_keys = _feature_keys(training_texts)
+    observed_labels = {}
+    for key, label in zip(training_keys, training_labels):
+        if key in observed_labels and observed_labels[key] != label:
+            raise ValueError("training labels conflict for feature-equivalent prompts")
+        observed_labels[key] = label
     holdout_keys = _feature_keys(texts)
     if len(set(holdout_keys)) != len(holdout_keys):
         raise ValueError("holdout contains feature-equivalent duplicate prompts")
-    if training_keys.intersection(holdout_keys):
+    if set(training_keys).intersection(holdout_keys):
         raise ValueError("holdout overlaps training data under TF-IDF normalization")
 
     detector = PromptInjectionDetector().fit(training_texts, training_labels)
     tp = fp = tn = fn = 0
     for text, actual in zip(texts, labels):
-        prediction = int(detector.is_injection(text, threshold=threshold))
+        raw_prediction = detector.is_injection(text, threshold=threshold)
+        # Never coerce arbitrary numeric/string values to 0 or 1: an
+        # incorrect adapter could otherwise fabricate a plausible confusion
+        # matrix (for example int(0.9) silently becomes a negative).
+        if not isinstance(raw_prediction, (bool, np.bool_)):
+            raise ValueError("detector must return boolean holdout decisions")
+        prediction = int(raw_prediction)
         tp += int(prediction == 1 and actual == 1)
         fp += int(prediction == 1 and actual == 0)
         tn += int(prediction == 0 and actual == 0)
