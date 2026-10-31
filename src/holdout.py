@@ -27,6 +27,7 @@ from train import dataset_provenance, matthews_correlation, wilson_interval
 import examples
 
 MAX_HOLDOUT_BYTES = 2_000_000
+MAX_REPORTED_ERROR_ROWS_PER_CLASS = 20
 
 
 def _reject_duplicate_keys(pairs):
@@ -141,7 +142,8 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
 
     detector = PromptInjectionDetector().fit(training_texts, training_labels)
     tp = fp = tn = fn = 0
-    for text, actual in zip(texts, labels):
+    false_positive_rows, false_negative_rows = [], []
+    for row_number, (text, actual) in enumerate(zip(texts, labels), 1):
         raw_prediction = detector.is_injection(text, threshold=threshold)
         # Never coerce arbitrary numeric/string values to 0 or 1: an
         # incorrect adapter could otherwise fabricate a plausible confusion
@@ -153,6 +155,14 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
         fp += int(prediction == 1 and actual == 0)
         tn += int(prediction == 0 and actual == 0)
         fn += int(prediction == 0 and actual == 1)
+        # Refer back to the supplied JSONL without publishing prompt text.
+        # Bound the error examples in large holdouts; totals remain exact.
+        if prediction == 1 and actual == 0:
+            if len(false_positive_rows) < MAX_REPORTED_ERROR_ROWS_PER_CLASS:
+                false_positive_rows.append(row_number)
+        elif prediction == 0 and actual == 1:
+            if len(false_negative_rows) < MAX_REPORTED_ERROR_ROWS_PER_CLASS:
+                false_negative_rows.append(row_number)
     benign, attacks = fp + tn, tp + fn
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / attacks
@@ -165,6 +175,15 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None):
         "training": dataset_provenance(training_texts, training_labels),
         "holdout": dataset_provenance(texts, labels),
         "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
+        "error_audit": {
+            "row_numbering": "one_based_holdout_input_order",
+            "max_rows_per_class": MAX_REPORTED_ERROR_ROWS_PER_CLASS,
+            "false_positive_rows": false_positive_rows,
+            "false_negative_rows": false_negative_rows,
+            "false_positive_omitted": fp - len(false_positive_rows),
+            "false_negative_omitted": fn - len(false_negative_rows),
+            "raw_prompt_text_included": False,
+        },
         "support": len(texts),
         "precision": precision,
         "precision_ci95": wilson_interval(tp, tp + fp),
