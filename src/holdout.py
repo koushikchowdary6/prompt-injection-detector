@@ -223,6 +223,29 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
                     counts["fn"], category_attacks
                 ),
             }
+        # Macro rates give each category with the relevant class support
+        # equal weight. Unlike pooled rates, these expose poor performance
+        # in small attack families without treating absent classes as zero.
+        # They remain exploratory because category definitions and samples
+        # are supplied by the evaluator, not independently validated.
+        group_rows = list(category_breakdown["groups"].values())
+        fpr_rates = [row["false_positive_rate"] for row in group_rows
+                     if row["false_positive_rate"] is not None]
+        fnr_rates = [row["false_negative_rate"] for row in group_rows
+                     if row["false_negative_rate"] is not None]
+        category_breakdown["macro_error_rates"] = {
+            "scope": "unweighted_categories_with_class_support_exploratory",
+            "false_positive_rate": (
+                sum(fpr_rates) / len(fpr_rates) if fpr_rates else None
+            ),
+            "false_positive_rate_eligible_categories": len(fpr_rates),
+            "false_negative_rate": (
+                sum(fnr_rates) / len(fnr_rates) if fnr_rates else None
+            ),
+            "false_negative_rate_eligible_categories": len(fnr_rates),
+            "total_categories": len(group_rows),
+            "note": "Unweighted macro rates are sensitive to small category samples; use category Wilson intervals and pooled rates alongside them.",
+        }
     benign, attacks = fp + tn, tp + fn
     precision = tp / (tp + fp) if tp + fp else 0.0
     recall = tp / attacks
