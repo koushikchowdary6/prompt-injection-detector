@@ -30,7 +30,7 @@ import examples
 MAX_HOLDOUT_BYTES = 2_000_000
 MAX_REPORTED_ERROR_ROWS_PER_CLASS = 20
 MAX_HOLDOUT_CATEGORIES = 20
-_CATEGORY = re.compile(r"[a-z][a-z0-9_-]{0,39}\\Z")
+_CATEGORY = re.compile(r"[a-z][a-z0-9_-]{0,39}")
 
 
 def _reject_duplicate_keys(pairs):
