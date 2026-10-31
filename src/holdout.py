@@ -174,6 +174,60 @@ def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8):
     }
 
 
+
+def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8):
+    """Find near-duplicate holdout rows without comparing a row to itself.
+
+    Each row is compared only with earlier rows using the same normalized
+    unigram/bigram feature sets as the training/holdout overlap check. A
+    duplicate sample can make holdout uncertainty look artificially narrow
+    even when there is no overlap with the training set.
+    """
+    postings = {}
+    seen_sets = []
+    near_rows = []
+    examples = []
+    maximum_similarity = 0.0
+    for row_number, key in enumerate(holdout_keys, 1):
+        features = set(key)
+        candidates = set()
+        for feature in features:
+            candidates.update(postings.get(feature, ()))
+        best_similarity, best_prior = 0.0, None
+        for index in candidates:
+            prior = seen_sets[index]
+            similarity = len(features & prior) / len(features | prior)
+            if (similarity > best_similarity
+                    or (similarity == best_similarity
+                        and best_prior is not None and index < best_prior)):
+                best_similarity, best_prior = similarity, index
+        maximum_similarity = max(maximum_similarity, best_similarity)
+        if best_similarity >= threshold:
+            near_rows.append(row_number)
+            if len(examples) < MAX_REPORTED_ERROR_ROWS_PER_CLASS:
+                examples.append({
+                    "row": row_number,
+                    "earlier_row": best_prior + 1,
+                    "similarity": best_similarity,
+                })
+        seen_sets.append(features)
+        for feature in features:
+            postings.setdefault(feature, set()).add(row_number - 1)
+    return {
+        "method": "jaccard_normalized_tfidf_unigram_bigram_feature_sets",
+        "threshold": threshold,
+        "near_overlap_count": len(near_rows),
+        "near_overlap_rows": near_rows[:MAX_REPORTED_ERROR_ROWS_PER_CLASS],
+        "near_overlap_rows_omitted": max(
+            0, len(near_rows) - MAX_REPORTED_ERROR_ROWS_PER_CLASS
+        ),
+        "example_row_pairs": examples,
+        "maximum_similarity": maximum_similarity,
+        "raw_prompt_text_included": False,
+        "note": "Within-holdout lexical near-duplicates may inflate effective sample size; not proof of shared origin.",
+    }
+
+
 def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categories=None,
                      reject_near_overlap=False):
     """Fit on training examples only, score each disjoint holdout item once."""
@@ -213,6 +267,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
     if set(training_keys).intersection(holdout_keys):
         raise ValueError("holdout overlaps training data under TF-IDF normalization")
     overlap_audit = _near_overlap_audit(training_keys, holdout_keys)
+    internal_overlap_audit = _internal_near_overlap_audit(holdout_keys)
     # Report-only remains the default for exploratory analysis. For a frozen
     # external evaluation, callers can fail closed before model fitting when
     # a holdout example is lexically too similar to training examples.
@@ -222,9 +277,16 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
             f"holdout has {overlap_audit['near_overlap_count']} near-overlap "
             f"example(s) at Jaccard >= {overlap_audit['threshold']}"
         )
+    if reject_near_overlap and internal_overlap_audit["near_overlap_count"]:
+        raise ValueError(
+            f"holdout has {internal_overlap_audit['near_overlap_count']} "
+            f"internally near-duplicate example(s) at Jaccard >= "
+            f"{internal_overlap_audit['threshold']}"
+        )
     overlap_audit["policy"] = (
         "reject_at_threshold" if reject_near_overlap else "report_only"
     )
+    internal_overlap_audit["policy"] = overlap_audit["policy"]
 
     detector = PromptInjectionDetector().fit(training_texts, training_labels)
     tp = fp = tn = fn = 0
@@ -319,6 +381,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         "training": dataset_provenance(training_texts, training_labels),
         "holdout": dataset_provenance(texts, labels),
         "feature_overlap_audit": overlap_audit,
+        "holdout_internal_overlap_audit": internal_overlap_audit,
         "confusion_matrix": {"tp": tp, "fp": fp, "tn": tn, "fn": fn},
         "category_breakdown": category_breakdown,
         "error_audit": {
