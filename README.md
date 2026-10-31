@@ -239,8 +239,12 @@ prompt, for example:
 
 Run `python src/holdout.py --holdout path/to/external.jsonl --threshold 0.5`.
 The script fits on the repository's training examples only and reports a
-confusion matrix, FPR/FNR, balanced accuracy, F1, Wilson intervals, and
-SHA-256 fingerprints for both datasets. It rejects malformed JSONL, duplicate
+confusion matrix, FPR/FNR, balanced accuracy, F1, Matthews correlation
+coefficient (`mcc`), a 95% Wilson precision interval (`precision_ci95`),
+and SHA-256 fingerprints for both datasets. MCC is JSON `null` when the
+confusion-matrix denominator is zero; the precision interval is JSON `null`
+when there are no predicted positives. These metrics expose class imbalance
+and small-sample uncertainty, not calibrated model confidence. It rejects malformed JSONL, duplicate
 holdout examples, and training/holdout overlap under the same TF-IDF feature
 representation used for training. It never optimizes the threshold using
 holdout labels or prints raw prompts in the report.
