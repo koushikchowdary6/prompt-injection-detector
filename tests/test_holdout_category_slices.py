@@ -39,12 +39,21 @@ def test_category_slices_count_errors_and_keep_undefined_denominators_null(monke
     groups = report["category_breakdown"]["groups"]
     assert groups["benign"] == {
         "support": 2, "confusion_matrix": {"tp": 0, "fp": 1, "tn": 1, "fn": 0},
-        "false_positive_rate": 0.5, "false_negative_rate": None,
+        "false_positive_rate": 0.5,
+        "false_positive_rate_ci95": holdout.wilson_interval(1, 2),
+        "false_negative_rate": None, "false_negative_rate_ci95": None,
     }
     assert groups["encoded"]["false_negative_rate"] == 1.0
+    assert groups["encoded"]["false_negative_rate_ci95"] == holdout.wilson_interval(1, 1)
+    assert groups["encoded"]["false_negative_rate_ci95"][0] < 1
     assert groups["encoded"]["false_positive_rate"] is None
+    assert groups["encoded"]["false_positive_rate_ci95"] is None
     assert groups["role_spoofing"]["false_negative_rate"] == 0.0
+    assert groups["role_spoofing"]["false_negative_rate_ci95"] == holdout.wilson_interval(0, 1)
+    assert groups["role_spoofing"]["false_negative_rate_ci95"][1] > 0
     assert groups["role_spoofing"]["false_positive_rate"] is None
+    assert groups["role_spoofing"]["false_positive_rate_ci95"] is None
+    assert report["recall_ci95"] == holdout.wilson_interval(1, 2)
     assert report["category_breakdown"]["scope"].startswith("user_supplied")
     assert all(text not in json.dumps(report) for text in texts)
 
@@ -133,3 +142,22 @@ def test_misaligned_category_list_is_rejected():
             ["benign unique weather", "attack reveal secrets"], [0, 1],
             train_data=TRAIN, categories=["benign"],
         )
+
+
+def test_no_categories_still_reports_overall_recall_uncertainty(monkeypatch):
+    class StubDetector:
+        def fit(self, texts, labels):
+            return self
+
+        def is_injection(self, text, threshold):
+            return False
+
+    monkeypatch.setattr(holdout, "PromptInjectionDetector", StubDetector)
+    report = holdout.evaluate_holdout(
+        ["benign unique forecast", "attack novel role spoofing"],
+        [0, 1], train_data=TRAIN,
+    )
+    assert report["category_breakdown"] is None
+    assert report["recall"] == 0.0
+    assert report["recall_ci95"] == holdout.wilson_interval(0, 1)
+    assert report["recall_ci95"][1] > 0.0

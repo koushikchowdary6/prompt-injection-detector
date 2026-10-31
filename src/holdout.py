@@ -213,8 +213,14 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
                 "false_positive_rate": (
                     counts["fp"] / category_benign if category_benign else None
                 ),
+                "false_positive_rate_ci95": wilson_interval(
+                    counts["fp"], category_benign
+                ),
                 "false_negative_rate": (
                     counts["fn"] / category_attacks if category_attacks else None
+                ),
+                "false_negative_rate_ci95": wilson_interval(
+                    counts["fn"], category_attacks
                 ),
             }
     benign, attacks = fp + tn, tp + fn
@@ -244,6 +250,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         "precision_ci95": wilson_interval(tp, tp + fp),
         "mcc": matthews_correlation(tp, fp, tn, fn),
         "recall": recall,
+        "recall_ci95": wilson_interval(tp, attacks),
         "f1": 2 * precision * recall / (precision + recall) if precision + recall else 0.0,
         "balanced_accuracy": (recall + tn / benign) / 2,
         "false_positive_rate": fp / benign,
