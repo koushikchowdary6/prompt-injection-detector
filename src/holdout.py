@@ -61,9 +61,15 @@ def load_holdout(path: str | Path):
     if len(raw) > MAX_HOLDOUT_BYTES:
         raise ValueError("holdout exceeds 2,000,000 bytes")
     try:
-        lines = raw.decode("utf-8").splitlines()
+        decoded = raw.decode("utf-8")
     except UnicodeDecodeError as exc:
         raise ValueError("holdout must be UTF-8") from exc
+    # JSONL records are delimited by LF, not by every Unicode line-break
+    # character. splitlines() corrupts valid JSON strings containing U+2028,
+    # U+2029, or U+0085 and can silently change the evaluation sample count.
+    lines = decoded.split("\n")
+    if lines[-1] == "":
+        lines.pop()  # One conventional terminal LF is not an empty record.
     texts, labels = [], []
     for number, line in enumerate(lines, 1):
         if not line.strip():
