@@ -174,7 +174,8 @@ def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8):
     }
 
 
-def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categories=None):
+def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categories=None,
+                     reject_near_overlap=False):
     """Fit on training examples only, score each disjoint holdout item once."""
     if (type(threshold) not in (int, float) or not math.isfinite(threshold)
             or not 0 <= threshold <= 1):
@@ -183,6 +184,8 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
             any(type(label) is not int or label not in (0, 1) for label in labels)
             or set(labels) != {0, 1}):
         raise ValueError("holdout requires aligned examples from both classes")
+    if type(reject_near_overlap) is not bool:
+        raise ValueError("reject_near_overlap must be a boolean")
     if categories is not None:
         if (len(categories) != len(texts)
                 or any(not isinstance(category, str)
@@ -210,6 +213,18 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
     if set(training_keys).intersection(holdout_keys):
         raise ValueError("holdout overlaps training data under TF-IDF normalization")
     overlap_audit = _near_overlap_audit(training_keys, holdout_keys)
+    # Report-only remains the default for exploratory analysis. For a frozen
+    # external evaluation, callers can fail closed before model fitting when
+    # a holdout example is lexically too similar to training examples.
+    # This is a conservative screening gate, not a data-independence proof.
+    if reject_near_overlap and overlap_audit["near_overlap_count"]:
+        raise ValueError(
+            f"holdout has {overlap_audit['near_overlap_count']} near-overlap "
+            f"example(s) at Jaccard >= {overlap_audit['threshold']}"
+        )
+    overlap_audit["policy"] = (
+        "reject_at_threshold" if reject_near_overlap else "report_only"
+    )
 
     detector = PromptInjectionDetector().fit(training_texts, training_labels)
     tp = fp = tn = fn = 0
@@ -336,11 +351,16 @@ def main(argv=None):
     )
     parser.add_argument("--holdout", type=Path, required=True)
     parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument(
+        "--reject-near-overlap", action="store_true",
+        help="reject holdout rows with normalized TF-IDF Jaccard >= 0.8 before fitting",
+    )
     args = parser.parse_args(argv)
     try:
         texts, labels, categories = load_holdout(args.holdout, with_categories=True)
         report = evaluate_holdout(
-            texts, labels, threshold=args.threshold, categories=categories
+            texts, labels, threshold=args.threshold, categories=categories,
+            reject_near_overlap=args.reject_near_overlap,
         )
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
