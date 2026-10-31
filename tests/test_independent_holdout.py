@@ -32,7 +32,7 @@ def test_holdout_reports_all_confusion_cells_without_training_on_test(monkeypatc
     assert report["confusion_matrix"] == {"tp": 1, "fp": 0, "tn": 1, "fn": 0}
     assert report["false_positive_rate"] == report["false_negative_rate"] == 0.0
     assert report["independent_collection_verified"] is False
-    assert report["threshold_selected_on_holdout"] is False
+    assert report["threshold_preselection_verified"] is False
     assert report["training"]["dataset_sha256"] != report["holdout"]["dataset_sha256"]
     json.dumps(report, allow_nan=False)
 
