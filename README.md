@@ -256,6 +256,16 @@ feature-equivalent training examples and refuses non-boolean detector decisions
 rather than silently coercing them into confusion-matrix counts. It never
 optimizes the threshold using holdout labels or prints raw prompts in the report.
 
+For actionable error analysis, `error_audit` lists **1-based input JSONL row
+numbers** for false positives and missed attacks. This lets you inspect the
+original locally held dataset without echoing sensitive prompt text into a
+shared CI log. Each error class lists at most 20 rows; exact confusion-matrix
+totals and `false_positive_omitted` / `false_negative_omitted` preserve the
+number not listed. Row references only make sense with the same input ordering
+and dataset fingerprint. This does not validate labels, establish independent
+collection, or prevent disclosure if the original dataset is shared.
+
+
 **Important:** This is an evaluation *tool*, not a newly collected holdout
 dataset or evidence of independently measured deployment performance.
 Feature-level overlap checks cannot prove that collection sources, prompt
