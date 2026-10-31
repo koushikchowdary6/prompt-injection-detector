@@ -7,6 +7,7 @@ collection must still be established by the experimenter.
 from __future__ import annotations
 
 import argparse
+from collections import Counter
 import json
 import math
 import os
@@ -261,6 +262,24 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         if key in observed_labels and observed_labels[key] != label:
             raise ValueError("training labels conflict for feature-equivalent prompts")
         observed_labels[key] = label
+    # Repeated feature-equivalent training rows silently give some examples
+    # extra weight in TF-IDF/logistic-regression fitting. Expose this in the
+    # evaluation report without disclosing raw training prompts. Equal-label
+    # duplicates are permitted for compatibility; conflicting labels above
+    # remain a hard error.
+    training_counts = Counter(training_keys)
+    duplicate_groups = [count for count in training_counts.values() if count > 1]
+    training_duplicate_audit = {
+        "method": "normalized_tfidf_unigram_bigram_feature_multisets",
+        "total_rows": len(training_keys),
+        "unique_feature_rows": len(training_counts),
+        "duplicate_groups": len(duplicate_groups),
+        "extra_duplicate_rows": sum(count - 1 for count in duplicate_groups),
+        "largest_group_size": max(training_counts.values()),
+        "conflicting_labels_rejected": True,
+        "raw_prompt_text_included": False,
+        "note": "Same-label feature-equivalent training rows can overweight examples; this is not an independent-sampling assessment.",
+    }
     holdout_keys = _feature_keys(texts)
     if len(set(holdout_keys)) != len(holdout_keys):
         raise ValueError("holdout contains feature-equivalent duplicate prompts")
@@ -379,6 +398,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         "risk_scores_calibrated": False,
         "threshold": threshold,
         "training": dataset_provenance(training_texts, training_labels),
+        "training_duplicate_audit": training_duplicate_audit,
         "holdout": dataset_provenance(texts, labels),
         "feature_overlap_audit": overlap_audit,
         "holdout_internal_overlap_audit": internal_overlap_audit,
