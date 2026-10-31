@@ -277,9 +277,13 @@ JSONL row (or omit it from all rows). Example:
 ```
 
 The CLI then emits `category_breakdown.groups` with each group's support,
-confusion counts, false-positive rate, and false-negative rate. A rate is
-JSON `null` if that group has no examples of the relevant class, rather
-than being misleadingly reported as zero. Categories must be lowercase ASCII
+confusion counts, false-positive rate, false-negative rate, and approximate
+95% Wilson intervals (`false_positive_rate_ci95` and
+`false_negative_rate_ci95`). A rate **and its interval** are JSON `null`
+if that group has no examples of the relevant class, rather than being
+misleadingly reported as zero. Even a group with zero observed errors can
+have a wide upper bound when its support is small. The overall holdout report
+also includes `recall_ci95` for attack recall. Categories must be lowercase ASCII
 slugs of up to 40 characters; at most 20 categories are accepted. Unknown
 fields, mixed labeled/unlabeled rows, and invalid slugs fail closed. The
 report includes category names and counts **but never raw prompt text**;
