@@ -176,7 +176,8 @@ def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8):
 
 
 
-def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="holdout"):
+def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="holdout",
+                                 labels=None):
     """Find near-duplicate holdout rows without comparing a row to itself.
 
     Each row is compared only with earlier rows using the same normalized
@@ -184,10 +185,14 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="h
     duplicate sample can make holdout uncertainty look artificially narrow
     even when there is no overlap with the training set.
     """
+    if labels is not None and len(labels) != len(holdout_keys):
+        raise ValueError("near-overlap labels must align with feature rows")
     postings = {}
     seen_sets = []
     near_rows = []
     examples = []
+    cross_label_rows = []
+    cross_label_examples = []
     maximum_similarity = 0.0
     for row_number, key in enumerate(holdout_keys, 1):
         features = set(key)
@@ -195,6 +200,7 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="h
         for feature in features:
             candidates.update(postings.get(feature, ()))
         best_similarity, best_prior = 0.0, None
+        cross_similarity, cross_prior = 0.0, None
         for index in candidates:
             prior = seen_sets[index]
             similarity = len(features & prior) / len(features | prior)
@@ -202,6 +208,14 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="h
                     or (similarity == best_similarity
                         and best_prior is not None and index < best_prior)):
                 best_similarity, best_prior = similarity, index
+            # The most similar earlier row may share the current label while
+            # another highly similar row disagrees. Search *all* candidates
+            # rather than inferring label consistency from the nearest pair.
+            if (labels is not None and labels[index] != labels[row_number - 1]
+                    and (similarity > cross_similarity
+                         or (similarity == cross_similarity
+                             and cross_prior is not None and index < cross_prior))):
+                cross_similarity, cross_prior = similarity, index
         maximum_similarity = max(maximum_similarity, best_similarity)
         if best_prior is not None and best_similarity >= threshold:
             near_rows.append(row_number)
@@ -210,6 +224,14 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="h
                     "row": row_number,
                     "earlier_row": best_prior + 1,
                     "similarity": best_similarity,
+                })
+        if cross_prior is not None and cross_similarity >= threshold:
+            cross_label_rows.append(row_number)
+            if len(cross_label_examples) < MAX_REPORTED_ERROR_ROWS_PER_CLASS:
+                cross_label_examples.append({
+                    "row": row_number,
+                    "earlier_row": cross_prior + 1,
+                    "similarity": cross_similarity,
                 })
         seen_sets.append(features)
         for feature in features:
@@ -223,6 +245,12 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="h
             0, len(near_rows) - MAX_REPORTED_ERROR_ROWS_PER_CLASS
         ),
         "example_row_pairs": examples,
+        "cross_label_audit_enabled": labels is not None,
+        "cross_label_near_overlap_count": len(cross_label_rows),
+        "cross_label_example_row_pairs": cross_label_examples,
+        "cross_label_rows_omitted": max(
+            0, len(cross_label_rows) - MAX_REPORTED_ERROR_ROWS_PER_CLASS
+        ),
         "maximum_similarity": maximum_similarity,
         "raw_prompt_text_included": False,
         "note": f"Within-{dataset_name} lexical near-duplicates may inflate effective sample size; not proof of shared origin.",
@@ -301,7 +329,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
     # exact duplicates, and optionally fail closed before model fitting.
     # This is a lexical screening heuristic, not proof of label leakage.
     training_near_overlap_audit = _internal_near_overlap_audit(
-        training_keys, dataset_name="training"
+        training_keys, dataset_name="training", labels=training_labels
     )
     if reject_training_near_overlap and training_near_overlap_audit["near_overlap_count"]:
         raise ValueError(
@@ -317,7 +345,9 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
     if set(training_keys).intersection(holdout_keys):
         raise ValueError("holdout overlaps training data under TF-IDF normalization")
     overlap_audit = _near_overlap_audit(training_keys, holdout_keys)
-    internal_overlap_audit = _internal_near_overlap_audit(holdout_keys)
+    internal_overlap_audit = _internal_near_overlap_audit(
+        holdout_keys, labels=labels
+    )
     # Report-only remains the default for exploratory analysis. For a frozen
     # external evaluation, callers can fail closed before model fitting when
     # a holdout example is lexically too similar to training examples.
