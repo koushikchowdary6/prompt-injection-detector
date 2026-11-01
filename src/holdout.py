@@ -29,6 +29,9 @@ from train import dataset_provenance, matthews_correlation, wilson_interval
 import examples
 
 MAX_HOLDOUT_BYTES = 2_000_000
+# A bounded file can still contain deeply nested JSON that exhausts the
+# decoder's recursion limit before holdout row validation runs.
+MAX_HOLDOUT_JSON_DEPTH = 64
 MAX_REPORTED_ERROR_ROWS_PER_CLASS = 20
 MAX_HOLDOUT_CATEGORIES = 20
 # Repeated common features can turn even a bounded JSONL file into millions
@@ -44,6 +47,31 @@ def _reject_duplicate_keys(pairs):
             raise ValueError(f"duplicate JSON key: {key}")
         result[key] = value
     return result
+
+
+def _check_json_nesting(raw: str) -> None:
+    """Reject excessive structural nesting, ignoring brackets in JSON strings."""
+    depth = 0
+    quoted = False
+    escaped = False
+    for char in raw:
+        if quoted:
+            if escaped:
+                escaped = False
+            elif char == "\\\\":
+                escaped = True
+            elif char == '"':
+                quoted = False
+        elif char == '"':
+            quoted = True
+        elif char in "[{":
+            depth += 1
+            if depth > MAX_HOLDOUT_JSON_DEPTH:
+                raise ValueError(
+                    f"holdout JSON nesting exceeds {MAX_HOLDOUT_JSON_DEPTH} levels"
+                )
+        elif char in "]}":
+            depth -= 1
 
 
 def load_holdout(path: str | Path, *, with_categories=False):
@@ -84,6 +112,7 @@ def load_holdout(path: str | Path, *, with_categories=False):
         if not line.strip():
             raise ValueError(f"holdout line {number}: empty row")
         try:
+            _check_json_nesting(line)
             row = json.loads(
                 line, object_pairs_hook=_reject_duplicate_keys,
                 parse_constant=lambda value: (_ for _ in ()).throw(
