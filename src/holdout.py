@@ -230,7 +230,7 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8):
 
 
 def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categories=None,
-                     reject_near_overlap=False):
+                     reject_near_overlap=False, reject_training_duplicates=False):
     """Fit on training examples only, score each disjoint holdout item once."""
     if (type(threshold) not in (int, float) or not math.isfinite(threshold)
             or not 0 <= threshold <= 1):
@@ -241,6 +241,8 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         raise ValueError("holdout requires aligned examples from both classes")
     if type(reject_near_overlap) is not bool:
         raise ValueError("reject_near_overlap must be a boolean")
+    if type(reject_training_duplicates) is not bool:
+        raise ValueError("reject_training_duplicates must be a boolean")
     if categories is not None:
         if (len(categories) != len(texts)
                 or any(not isinstance(category, str)
@@ -280,6 +282,17 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         "raw_prompt_text_included": False,
         "note": "Same-label feature-equivalent training rows can overweight examples; this is not an independent-sampling assessment.",
     }
+    # Strict frozen-evaluation mode rejects repeated training examples before
+    # model fitting, so duplicate weighting cannot distort the baseline.
+    # Report-only is retained for backwards-compatible exploratory runs.
+    if reject_training_duplicates and duplicate_groups:
+        raise ValueError(
+            f"training has {len(duplicate_groups)} feature-equivalent duplicate "
+            "group(s); remove repeated rows before evaluation"
+        )
+    training_duplicate_audit["policy"] = (
+        "reject_duplicates" if reject_training_duplicates else "report_only"
+    )
     holdout_keys = _feature_keys(texts)
     if len(set(holdout_keys)) != len(holdout_keys):
         raise ValueError("holdout contains feature-equivalent duplicate prompts")
@@ -438,12 +451,17 @@ def main(argv=None):
         "--reject-near-overlap", action="store_true",
         help="reject holdout rows with normalized TF-IDF Jaccard >= 0.8 before fitting",
     )
+    parser.add_argument(
+        "--reject-training-duplicates", action="store_true",
+        help="reject feature-equivalent repeated training rows before model fitting",
+    )
     args = parser.parse_args(argv)
     try:
         texts, labels, categories = load_holdout(args.holdout, with_categories=True)
         report = evaluate_holdout(
             texts, labels, threshold=args.threshold, categories=categories,
             reject_near_overlap=args.reject_near_overlap,
+            reject_training_duplicates=args.reject_training_duplicates,
         )
     except (ValueError, OSError) as exc:
         parser.error(str(exc))
