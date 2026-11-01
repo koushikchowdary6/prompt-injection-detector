@@ -3,16 +3,51 @@ on:
   push:
     branches: [main]
   pull_request:
+permissions:
+  contents: read
+
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 30
+    strategy:
+      matrix:
+        python-version: ['3.10', '3.12']
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: ${{ matrix.python-version }}
       - run: pip install -r requirements.txt
+      - name: Verify installed dependency consistency
+        run: python -m pip check
       - name: Run tests
         run: python -m pytest tests/ -v
       - name: Train + evaluate (cross-validation)
         run: python src/train.py
+
+      - name: Generate and validate grouped-CV guardrail evidence
+        if: matrix.python-version == '3.12'
+        run: |
+          python src/train.py --json --thresholds 0.3 0.5 0.7 > grouped-cv.json
+          python - <<'PY'
+          import json
+          from pathlib import Path
+          report = json.loads(Path("grouped-cv.json").read_text())
+          assert report["evaluation"] == "stratified_grouped_cross_validation"
+          assert report["threshold_selection"] == "exploratory_same_folds"
+          assert report["risk_scores_calibrated"] is False
+          assert [row["threshold"] for row in report["results"]] == [0.3, 0.5, 0.7]
+          for row in report["results"]:
+              assert sum(row["confusion_matrix"].values()) == row["support"]
+          assert len(report["dataset_sha256"]) == 64
+          PY
+
+      - name: Upload grouped-CV evidence
+        if: matrix.python-version == '3.12'
+        uses: actions/upload-artifact@v4
+        with:
+          name: grouped-cv-guardrail-evidence
+          path: grouped-cv.json
+          if-no-files-found: error
+          retention-days: 30

@@ -14,7 +14,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent / "data"))
 
 import numpy as np
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import StratifiedGroupKFold
+from sklearn.model_selection import StratifiedKFold
 
 import examples
 from detector import PromptInjectionDetector, normalize_text
@@ -116,14 +116,31 @@ def grouped_folds(texts, labels, n_splits=5, seed=0):
             raise ValueError(
                 f"need at least {n_splits} distinct prompts for class {label}"
             )
-    splitter = StratifiedGroupKFold(
+    # Stratify the *unique feature groups*, not their individual rows.
+    # StratifiedGroupKFold balances sample counts approximately and can put
+    # every example of a class in a different fold on some sklearn versions,
+    # even when each class has enough independent groups for full coverage.
+    # Exact group-level stratification guarantees both labels in each fold
+    # when there are at least n_splits groups per label. Duplicate prompts
+    # remain inseparable; fold sample sizes may differ for unequal groups.
+    unique_groups = list(group_labels)
+    unique_labels = [group_labels[group] for group in unique_groups]
+    splitter = StratifiedKFold(
         n_splits=n_splits, shuffle=True, random_state=seed
     )
-    folds = list(splitter.split(texts, labels, groups=groups))
-    # Enough independent groups per class does not guarantee every *training*
-    # partition contains both labels: grouped stratification is approximate,
-    # especially with uneven group sizes. LogisticRegression cannot fit a
-    # single-class training partition, and a partial CV sweep is misleading.
+    folds = []
+    for train_group_ids, test_group_ids in splitter.split(unique_groups, unique_labels):
+        train_groups = {unique_groups[index] for index in train_group_ids}
+        test_groups = {unique_groups[index] for index in test_group_ids}
+        train_indices = np.array(
+            [index for index, group in enumerate(groups) if group in train_groups], dtype=int
+        )
+        test_indices = np.array(
+            [index for index, group in enumerate(groups) if group in test_groups], dtype=int
+        )
+        folds.append((train_indices, test_indices))
+    # Validate the splitter output anyway, including when a custom splitter
+    # is injected for testing. Never score a single-class partition.
     for fold_index, (train_indices, test_indices) in enumerate(folds, start=1):
         if {labels[index] for index in train_indices} != {0, 1}:
             raise ValueError(

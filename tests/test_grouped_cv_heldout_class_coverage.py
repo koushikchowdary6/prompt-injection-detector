@@ -25,11 +25,11 @@ def test_single_class_heldout_fold_rejected_before_evaluation(monkeypatch):
         def __init__(self, **kwargs):
             pass
 
-        def split(self, texts, labels, groups):
+        def split(self, groups, labels):
             yield np.array([0, 2, 3]), np.array([1])
             yield np.array([1, 3]), np.array([0, 2])
 
-    monkeypatch.setattr(train, "StratifiedGroupKFold", ImbalancedSplitter)
+    monkeypatch.setattr(train, "StratifiedKFold", ImbalancedSplitter)
     with pytest.raises(ValueError, match="single-class held-out"):
         train.grouped_folds(texts, labels, n_splits=2, seed=42)
 

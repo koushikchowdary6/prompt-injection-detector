@@ -24,11 +24,11 @@ def test_single_class_training_fold_is_rejected_before_model_fit(monkeypatch):
         def __init__(self, **kwargs):
             pass
 
-        def split(self, texts, labels, groups):
+        def split(self, groups, labels):
             yield np.array([0, 1, 2, 3]), np.array([4, 5, 6, 7])
             yield np.array([4, 5, 6, 7]), np.array([0, 1, 2, 3])
 
-    monkeypatch.setattr(train, "StratifiedGroupKFold", BadGroupedSplitter)
+    monkeypatch.setattr(train, "StratifiedKFold", BadGroupedSplitter)
 
     with pytest.raises(ValueError, match="single-class training"):
         train.grouped_folds(texts, labels, n_splits=2, seed=42)
