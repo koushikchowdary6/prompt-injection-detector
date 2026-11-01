@@ -131,14 +131,23 @@ def _feature_keys(texts):
 
 
 
-def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8):
-    """Audit high lexical similarity without claiming independent collection.
+def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8,
+                        training_labels=None, holdout_labels=None):
+    """Audit lexical train/holdout overlap and possible label disagreement.
 
-    Jaccard similarity is computed over *sets* of the same normalized
-    unigram/bigram TF-IDF features used by the classifier. A token-to-training
-    inverted index avoids comparing disjoint examples. This is a screening
-    diagnostic, not a semantic similarity model or a data-independence proof.
+    The audit uses Jaccard similarity over normalized unigram/bigram feature
+    *sets*, not semantic equivalence. Opposite-label pairs are reviewer-facing
+    evidence, not proof of an annotation error or independent collection.
+    Raw prompt text is never included in the report.
     """
+    if (training_labels is None) != (holdout_labels is None):
+        raise ValueError("both training and holdout labels are required for cross-label audit")
+    if training_labels is not None and (
+        len(training_labels) != len(training_keys)
+        or len(holdout_labels) != len(holdout_keys)
+    ):
+        raise ValueError("near-overlap labels must align with feature rows")
+
     training_sets = [set(key) for key in training_keys]
     postings = {}
     for index, features in enumerate(training_sets):
@@ -146,20 +155,38 @@ def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8):
             postings.setdefault(feature, set()).add(index)
 
     near_rows = []
+    cross_label_rows = []
+    cross_label_examples = []
     maximum_similarity = 0.0
     for row_number, key in enumerate(holdout_keys, 1):
         features = set(key)
         candidate_ids = set()
         for feature in features:
             candidate_ids.update(postings.get(feature, ()))
-        best = max((
-            len(features & training_sets[index])
-            / len(features | training_sets[index])
-            for index in candidate_ids
-        ), default=0.0)
+
+        best = 0.0
+        best_cross_similarity, best_cross_index = 0.0, None
+        for index in candidate_ids:
+            similarity = len(features & training_sets[index]) / len(features | training_sets[index])
+            best = max(best, similarity)
+            if (training_labels is not None
+                    and training_labels[index] != holdout_labels[row_number - 1]
+                    and (similarity > best_cross_similarity
+                         or (similarity == best_cross_similarity
+                             and best_cross_index is not None and index < best_cross_index))):
+                best_cross_similarity, best_cross_index = similarity, index
+
         maximum_similarity = max(maximum_similarity, best)
         if best >= threshold:
             near_rows.append(row_number)
+        if best_cross_index is not None and best_cross_similarity >= threshold:
+            cross_label_rows.append(row_number)
+            if len(cross_label_examples) < MAX_REPORTED_ERROR_ROWS_PER_CLASS:
+                cross_label_examples.append({
+                    "holdout_row": row_number,
+                    "training_row": best_cross_index + 1,
+                    "similarity": best_cross_similarity,
+                })
     return {
         "method": "jaccard_normalized_tfidf_unigram_bigram_feature_sets",
         "threshold": threshold,
@@ -168,12 +195,17 @@ def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8):
         "near_overlap_rows_omitted": max(
             0, len(near_rows) - MAX_REPORTED_ERROR_ROWS_PER_CLASS
         ),
+        "cross_label_audit_enabled": training_labels is not None,
+        "cross_label_near_overlap_count": len(cross_label_rows),
+        "cross_label_example_row_pairs": cross_label_examples,
+        "cross_label_rows_omitted": max(
+            0, len(cross_label_rows) - MAX_REPORTED_ERROR_ROWS_PER_CLASS
+        ),
         "maximum_similarity": maximum_similarity,
         "raw_prompt_text_included": False,
         "independent_collection_verified": False,
-        "note": "Heuristic lexical near-overlap, not proof of leakage or independent sampling.",
+        "note": "Heuristic lexical near-overlap and label disagreement; not proof of leakage, incorrect labels, or independent sampling.",
     }
-
 
 
 def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="holdout",
@@ -344,7 +376,10 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         raise ValueError("holdout contains feature-equivalent duplicate prompts")
     if set(training_keys).intersection(holdout_keys):
         raise ValueError("holdout overlaps training data under TF-IDF normalization")
-    overlap_audit = _near_overlap_audit(training_keys, holdout_keys)
+    overlap_audit = _near_overlap_audit(
+        training_keys, holdout_keys,
+        training_labels=training_labels, holdout_labels=labels,
+    )
     internal_overlap_audit = _internal_near_overlap_audit(
         holdout_keys, labels=labels
     )
