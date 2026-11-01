@@ -127,6 +127,11 @@ def load_holdout(path: str | Path, *, with_categories=False):
                 or not row["text"].strip()
                 or type(row["label"]) is not int or row["label"] not in (0, 1)):
             raise ValueError(f"holdout line {number}: expected text and binary integer label")
+        # JSON permits escaped unpaired UTF-16 surrogates even though they
+        # cannot be encoded as UTF-8 or safely normalized for model features.
+        # Reject them at the source row, not later during model evaluation.
+        if any("\ud800" <= char <= "\udfff" for char in row["text"]):
+            raise ValueError(f"holdout line {number}: invalid Unicode surrogate in text")
         has_category = "category" in row
         if category_mode is None:
             category_mode = has_category
