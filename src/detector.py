@@ -52,6 +52,9 @@ HEURISTIC_PATTERNS = [
     # High-signal attempts to inject a privileged role boundary into
     # untrusted prompt text (ChatML and Llama 3 header conventions).
     r"(?:<\|im_start\|>|\[im_start\])\s*(?:system|developer)\b|\[start_header_id\]\s*(?:system|developer)\s*\[end_header_id\]",
+    # Llama 2 chat templates use a privileged <<SYS>> block inside [INST].
+    # A forged system block in lower-trust text is a role-spoofing signal.
+    r"<<SYS>>",
 ]
 _COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERNS]
 
