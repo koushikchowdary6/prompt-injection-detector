@@ -176,7 +176,7 @@ def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8):
 
 
 
-def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8):
+def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="holdout"):
     """Find near-duplicate holdout rows without comparing a row to itself.
 
     Each row is compared only with earlier rows using the same normalized
@@ -225,12 +225,13 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8):
         "example_row_pairs": examples,
         "maximum_similarity": maximum_similarity,
         "raw_prompt_text_included": False,
-        "note": "Within-holdout lexical near-duplicates may inflate effective sample size; not proof of shared origin.",
+        "note": f"Within-{dataset_name} lexical near-duplicates may inflate effective sample size; not proof of shared origin.",
     }
 
 
 def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categories=None,
-                     reject_near_overlap=False, reject_training_duplicates=False):
+                     reject_near_overlap=False, reject_training_duplicates=False,
+                     reject_training_near_overlap=False):
     """Fit on training examples only, score each disjoint holdout item once."""
     if (type(threshold) not in (int, float) or not math.isfinite(threshold)
             or not 0 <= threshold <= 1):
@@ -243,6 +244,8 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         raise ValueError("reject_near_overlap must be a boolean")
     if type(reject_training_duplicates) is not bool:
         raise ValueError("reject_training_duplicates must be a boolean")
+    if type(reject_training_near_overlap) is not bool:
+        raise ValueError("reject_training_near_overlap must be a boolean")
     if categories is not None:
         if (len(categories) != len(texts)
                 or any(not isinstance(category, str)
@@ -292,6 +295,21 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         )
     training_duplicate_audit["policy"] = (
         "reject_duplicates" if reject_training_duplicates else "report_only"
+    )
+    # Near-duplicate training rows can overweight lexical patterns even when
+    # no two rows are feature-equivalent. Report the evidence separately from
+    # exact duplicates, and optionally fail closed before model fitting.
+    # This is a lexical screening heuristic, not proof of label leakage.
+    training_near_overlap_audit = _internal_near_overlap_audit(
+        training_keys, dataset_name="training"
+    )
+    if reject_training_near_overlap and training_near_overlap_audit["near_overlap_count"]:
+        raise ValueError(
+            f"training has {training_near_overlap_audit['near_overlap_count']} "
+            "near-duplicate example(s) at Jaccard >= 0.8"
+        )
+    training_near_overlap_audit["policy"] = (
+        "reject_at_threshold" if reject_training_near_overlap else "report_only"
     )
     holdout_keys = _feature_keys(texts)
     if len(set(holdout_keys)) != len(holdout_keys):
@@ -412,6 +430,7 @@ def evaluate_holdout(texts, labels, *, threshold=0.5, train_data=None, categorie
         "threshold": threshold,
         "training": dataset_provenance(training_texts, training_labels),
         "training_duplicate_audit": training_duplicate_audit,
+        "training_near_overlap_audit": training_near_overlap_audit,
         "holdout": dataset_provenance(texts, labels),
         "feature_overlap_audit": overlap_audit,
         "holdout_internal_overlap_audit": internal_overlap_audit,
@@ -455,6 +474,10 @@ def main(argv=None):
         "--reject-training-duplicates", action="store_true",
         help="reject feature-equivalent repeated training rows before model fitting",
     )
+    parser.add_argument(
+        "--reject-training-near-overlap", action="store_true",
+        help="reject near-duplicate training rows (normalized feature Jaccard >= 0.8) before fitting",
+    )
     args = parser.parse_args(argv)
     try:
         texts, labels, categories = load_holdout(args.holdout, with_categories=True)
@@ -462,6 +485,7 @@ def main(argv=None):
             texts, labels, threshold=args.threshold, categories=categories,
             reject_near_overlap=args.reject_near_overlap,
             reject_training_duplicates=args.reject_training_duplicates,
+            reject_training_near_overlap=args.reject_training_near_overlap,
         )
     except (ValueError, OSError) as exc:
         parser.error(str(exc))

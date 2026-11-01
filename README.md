@@ -274,7 +274,17 @@ training patterns. For a frozen evaluation, add `--reject-training-duplicates`
 (or `reject_training_duplicates=True` in Python) to **reject before fitting**
 if any feature-equivalent training rows repeat, even with identical labels.
 The default remains report-only; `training_duplicate_audit.policy` records
-which mode was used. This flag does not deduplicate data, establish independent
+which mode was used.
+
+The separate `training_near_overlap_audit` screens *nonidentical* training
+examples for normalized TF-IDF unigram/bigram feature-set Jaccard similarity
+at or above 0.8. It reports bounded one-based row-pair references, counts,
+and maximum similarity without disclosing prompts. Use
+`--reject-training-near-overlap` (or `reject_training_near_overlap=True`)
+to reject such rows **before fitting** in stricter frozen evaluations;
+otherwise the audit is report-only. The heuristic can flag legitimate
+paraphrases and cannot prove shared provenance, data leakage, or independence.
+The existing exact-duplicate gate remains a separate control. This flag does not deduplicate data, establish independent
 collection, or validate label quality. It also rejects conflicting labels on
 feature-equivalent training examples and refuses non-boolean detector decisions
 rather than silently coercing them into confusion-matrix counts. It never
