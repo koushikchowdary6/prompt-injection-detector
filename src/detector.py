@@ -58,7 +58,7 @@ HEURISTIC_PATTERNS = [
     # Meta Llama 3.x serializes role headers with literal <|...|> tokens,
     # not only the bracketed spellings handled above. Missing this form
     # lets an attacker forge a system/developer turn in lower-trust text.
-    r"<\\|start_header_id\\|>\\s*(?:system|developer)\\s*<\\|end_header_id\\|>",
+    r"<\|start_header_id\|>\s*(?:system|developer)\s*<\|end_header_id\|>",
 ]
 _COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERNS]
 
