@@ -332,3 +332,23 @@ families, or authors are independent. Document dataset provenance, collect
 unseen attack families and benign hard negatives, freeze the threshold before
 evaluation, and report any remaining distribution shift and label uncertainty.
 The output explicitly sets `independent_collection_verified: false`.
+
+### Near-duplicate label disagreement diagnostics
+
+The separate-holdout evaluator now includes
+`cross_label_near_overlap_count` and bounded
+`cross_label_example_row_pairs` within both
+`training_near_overlap_audit` and `holdout_internal_overlap_audit`.
+These flag examples with **different binary labels** whose normalized
+TF-IDF unigram/bigram feature-set Jaccard similarity is at least 0.8.
+Every prior candidate is considered: a closer same-label example does
+not hide a conflicting-label neighbor. The report never includes raw
+prompt text, and the total count remains exact when the example list
+is capped.
+
+A disagreement is a **manual label-review warning**, not proof that
+either annotation is wrong or that examples share a source. The existing
+strict near-overlap flags still reject near-duplicates before model
+fitting; the new diagnostic makes review priorities visible in
+report-only runs. Neither this check nor a green CI run establishes
+real-world prompt-injection detection accuracy.
