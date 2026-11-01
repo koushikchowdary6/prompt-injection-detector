@@ -152,6 +152,21 @@ def _is_variation_selector(char: str) -> bool:
     return "\ufe00" <= char <= "\ufe0f" or "\U000e0100" <= char <= "\U000e01ef"
 
 
+def _emoji_symbol_before_joiner(text: str, index: int) -> bool:
+    """Recognize an emoji symbol before ZWJ, skipping optional variation selectors.
+
+    Sequences such as heart + VS16 + ZWJ + kiss mark are ordinary emoji.
+    Looking only at the immediately preceding codepoint misclassifies VS16
+    (category Mn) as non-emoji and consumes the adversarial separator budget.
+    This does not exempt a ZWJ that joins ordinary letters.
+    """
+    previous = index - 1
+    while previous >= 0 and _is_variation_selector(text[previous]):
+        previous -= 1
+    return (previous >= 0
+            and unicodedata.category(text[previous]) in {"So", "Sk"})
+
+
 def _is_hidden_separator(char: str) -> bool:
     """Invisible format/control/variation bytes can split attack keywords.
 
@@ -196,7 +211,7 @@ def heuristic_score(text: str) -> float:
         emoji_joiner = (
             char == "\u200d"
             and 0 < index < len(normalized) - 1
-            and unicodedata.category(normalized[index - 1]) in {"So", "Sk"}
+            and _emoji_symbol_before_joiner(normalized, index)
             and unicodedata.category(normalized[index + 1]) in {"So", "Sk"}
         )
         # Variation selectors are also legitimate emoji modifiers (including
