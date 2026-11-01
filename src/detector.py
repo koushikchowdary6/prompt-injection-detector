@@ -39,7 +39,10 @@ HEURISTIC_PATTERNS = [
     r"\bforget\s+(?:everything|all|what\s+you)\b",
     r"(reveal|print|repeat|show).{0,30}(system|initial|hidden).{0,20}(prompt|instructions?|message|rules)",
     r"\bdo\s+anything\s+now\b|developer\s+mode|jailbreak|\bDAN\b.{0,24}\b(mode|persona|assistant|jailbreak)\b",
-    # Export requests for privileged instructions use verbs beyond reveal/show.\n    # Require a privileged target to avoid flagging ordinary documentation.\n    r"\b(?:send|dump|leak|expose|disclose)\s+(?:(?:me|us)\s+)?(?:your|the)\s+(?:system|developer|hidden)\s+(?:prompt|instructions?|messages?)\b",\n    r"\bno\s+(?:restrictions|rules|filter|guidelines|safety)\b",
+    # Export requests for privileged instructions use verbs beyond reveal/show.
+    # Require a privileged target to avoid flagging ordinary documentation.
+    r"\b(?:send|dump|leak|expose|disclose)\s+(?:(?:me|us)\s+)?(?:your|the)\s+(?:system|developer|hidden)\s+(?:prompt|instructions?|messages?)\b",
+    r"\bno\s+(?:restrictions|rules|filter|guidelines|safety)\b",
     r"(bypass|override|disable).{0,20}(restrictions?|filters?|policy|guidelines|instructions?|safety)",
     r"pretend you are (a |an )?(different|unrestricted)",
     r"you are now.{0,40}\b(unrestricted|unfiltered|uncensored|developer mode|different assistant|dan)\b",
