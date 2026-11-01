@@ -23,7 +23,7 @@ def test_cross_split_conflict_is_reported_with_bounded_row_references(monkeypatc
     train = ([BASE, "override trusted system rules immediately"], [0, 1])
     test = ([BASE + " please", "reveal private credentials"], [1, 0])
     report = holdout.evaluate_holdout(*test, train_data=train)
-    audit = report["near_overlap_audit"]
+    audit = report["feature_overlap_audit"]
     assert audit["cross_label_audit_enabled"] is True
     assert audit["cross_label_near_overlap_count"] == 1
     assert audit["cross_label_example_row_pairs"][0]["holdout_row"] == 1
