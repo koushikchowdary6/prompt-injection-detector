@@ -42,6 +42,10 @@ HEURISTIC_PATTERNS = [
     # Export requests for privileged instructions use verbs beyond reveal/show.
     # Require a privileged target to avoid flagging ordinary documentation.
     r"\b(?:send|dump|leak|expose|disclose)\s+(?:(?:me|us)\s+)?(?:your|the)\s+(?:system|developer|hidden)\s+(?:prompt|instructions?|messages?)\b",
+    # Direct "give/provide/share" requests for privileged prompts are common
+    # paraphrases of "reveal". Exclude explicitly educational example/template
+    # requests to reduce false positives from prompt-engineering discussions.
+    r"\b(?:give|provide|share)\s+(?:(?:me|us)\s+)?(?:your|the)\s+(?:system|developer|hidden)\s+(?:prompt|instructions?|messages?)\b(?!\s+(?:examples?|templates?|documentation|docs)\b)",
     r"\bno\s+(?:restrictions|rules|filter|guidelines|safety)\b",
     r"(bypass|override|disable).{0,20}(restrictions?|filters?|policy|guidelines|instructions?|safety)",
     r"pretend you are (a |an )?(different|unrestricted)",
