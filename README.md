@@ -177,13 +177,20 @@ false-positive rate is `n/a` if a caller supplies no benign held-out samples;
 zero is not substituted for an undefined rate; the false-negative rate is likewise `n/a` if no attack samples exist. Compare thresholds on the **same held-out splits** to see the false-alarm versus missed-attack tradeoff. Choosing a threshold using these same folds is exploratory and does not provide an unbiased estimate of tuned performance; use separate validation/test data for deployment. These are **illustrative**
 measurements on the included dataset, not production detection guarantees.
 
-On the bundled labeled example set (illustrative, subject to fold composition):
+On the bundled 40-example set with seed 0 and group-level stratification
+(illustrative, not independently sampled), Python 3.10 and 3.12 CI both
+reported the following pooled out-of-fold results:
 
 | Metric | Score |
 |---|---|
-| Accuracy | ~0.85 |
-| Precision | ~1.00 |
-| Recall | ~0.70 |
+| Accuracy | 0.875 |
+| Precision | 1.000 |
+| Recall | 0.750 |
+| F1 | 0.857 |
+
+[Verified grouped-CV CI run and downloadable JSON threshold-sweep artifact](https://github.com/koushikchowdary6/prompt-injection-detector/actions/runs/41292269188).
+The artifact records the dataset fingerprint, confusion counts and fold-level
+coverage. It is not a calibrated or independent generalization estimate.
 
 High precision (few false alarms on benign prompts) with moderate recall —
 realistic for a small dataset, and exactly why the heuristic layer exists to
