@@ -31,6 +31,9 @@ import examples
 MAX_HOLDOUT_BYTES = 2_000_000
 MAX_REPORTED_ERROR_ROWS_PER_CLASS = 20
 MAX_HOLDOUT_CATEGORIES = 20
+# Repeated common features can turn even a bounded JSONL file into millions
+# of Jaccard pair checks. Fail explicitly rather than publishing a partial audit.
+MAX_NEAR_OVERLAP_PAIR_COMPARISONS = 1_000_000
 _CATEGORY = re.compile(r"[a-z][a-z0-9_-]{0,39}")
 
 
@@ -158,6 +161,7 @@ def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8,
     cross_label_rows = []
     cross_label_examples = []
     maximum_similarity = 0.0
+    pair_comparisons = 0
     for row_number, key in enumerate(holdout_keys, 1):
         features = set(key)
         candidate_ids = set()
@@ -167,6 +171,9 @@ def _near_overlap_audit(training_keys, holdout_keys, *, threshold=0.8,
         best = 0.0
         best_cross_similarity, best_cross_index = 0.0, None
         for index in candidate_ids:
+            pair_comparisons += 1
+            if pair_comparisons > MAX_NEAR_OVERLAP_PAIR_COMPARISONS:
+                raise ValueError("cross-split near-overlap audit exceeds pair comparison budget")
             similarity = len(features & training_sets[index]) / len(features | training_sets[index])
             best = max(best, similarity)
             if (training_labels is not None
@@ -226,6 +233,7 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="h
     cross_label_rows = []
     cross_label_examples = []
     maximum_similarity = 0.0
+    pair_comparisons = 0
     for row_number, key in enumerate(holdout_keys, 1):
         features = set(key)
         candidates = set()
@@ -234,6 +242,9 @@ def _internal_near_overlap_audit(holdout_keys, *, threshold=0.8, dataset_name="h
         best_similarity, best_prior = 0.0, None
         cross_similarity, cross_prior = 0.0, None
         for index in candidates:
+            pair_comparisons += 1
+            if pair_comparisons > MAX_NEAR_OVERLAP_PAIR_COMPARISONS:
+                raise ValueError(f"within-{dataset_name} near-overlap audit exceeds pair comparison budget")
             prior = seen_sets[index]
             similarity = len(features & prior) / len(features | prior)
             if (similarity > best_similarity
