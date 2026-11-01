@@ -168,7 +168,7 @@ print(det.is_injection("Ignore all previous instructions"))
 
 ## Results (5-fold cross-validation)
 
-The evaluator uses stratified **grouped** folds, keeping case/Unicode-equivalent prompts entirely in training or testing (never both). Conflicting labels and insufficient distinct examples fail with clear errors. The evaluator also rejects any grouped fold whose training **or held-out** partition contains only one class; grouped stratification is approximate, and single-class held-out folds cannot assess both false alarms and missed attacks. This avoids misleading coverage when a dataset includes duplicates or uneven groups. The bundled examples are small and illustrative, not an independent security benchmark.
+The evaluator stratifies **distinct TF-IDF feature-equivalent prompt groups** by class before expanding groups back to rows. Case/Unicode-equivalent prompts cannot cross train/test boundaries. This guarantees both classes in every held-out fold when there are enough independent groups per class, instead of relying on version-dependent approximate sample-level grouped stratification. Unequal group sizes can produce unequal fold sample counts; pooled confusion counts use actual held-out support. Conflicting labels, insufficient distinct examples, and any single-class training or held-out partition fail closed. The bundled examples are small and illustrative, not an independent security benchmark.
 
 The CLI accepts `--threshold` in [0, 1] and reports the chosen operating point. It also reports pooled out-of-fold **F1**, **false-positive rate** (`FP / (FP + TN)`), and **false-negative rate** (`FN / (FN + TP)`),
 held-out support, and a `TP/FP/TN/FN` confusion matrix. This makes false alarms
