@@ -55,6 +55,10 @@ HEURISTIC_PATTERNS = [
     # Llama 2 chat templates use a privileged <<SYS>> block inside [INST].
     # A forged system block in lower-trust text is a role-spoofing signal.
     r"<<SYS>>",
+    # Meta Llama 3.x serializes role headers with literal <|...|> tokens,
+    # not only the bracketed spellings handled above. Missing this form
+    # lets an attacker forge a system/developer turn in lower-trust text.
+    r"<\|start_header_id\|>\s*(?:system|developer)\s*<\|end_header_id\|>",
 ]
 _COMPILED = [re.compile(p, re.IGNORECASE | re.DOTALL) for p in HEURISTIC_PATTERNS]
 
