@@ -270,8 +270,12 @@ holdout examples, and training/holdout overlap under the same TF-IDF feature
 representation used for training. The `training_duplicate_audit` also reports
 feature-equivalent training rows, duplicate groups, and the largest repeated
 group without exposing prompts. Such repeated examples can overweight some
-training patterns; the report does not automatically deduplicate or prove
-sampling independence. It also rejects conflicting labels on
+training patterns. For a frozen evaluation, add `--reject-training-duplicates`
+(or `reject_training_duplicates=True` in Python) to **reject before fitting**
+if any feature-equivalent training rows repeat, even with identical labels.
+The default remains report-only; `training_duplicate_audit.policy` records
+which mode was used. This flag does not deduplicate data, establish independent
+collection, or validate label quality. It also rejects conflicting labels on
 feature-equivalent training examples and refuses non-boolean detector decisions
 rather than silently coercing them into confusion-matrix counts. It never
 optimizes the threshold using holdout labels or prints raw prompts in the report.
