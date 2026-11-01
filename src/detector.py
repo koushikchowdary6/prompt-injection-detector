@@ -32,6 +32,10 @@ from sklearn.pipeline import Pipeline
 HEURISTIC_PATTERNS = [
     r"\bignore\s+(?:(?:all|the)\s+)?(?:previous|prior|above)\b",
     r"\bdisregard\s+(?:(?:the|all)\s+)?(?:above|previous|prior)\b",
+    # Earlier/preceding instruction overrides are common attack paraphrases.
+    # Require an instruction-like target to avoid flagging benign requests
+    # such as "ignore earlier revisions in the changelog".
+    r"\b(?:ignore|disregard)\s+(?:(?:all|the|any)\s+)?(?:earlier|preceding)\s+(?:instructions?|rules|directions?|system\s+messages?)\b",
     r"\bforget\s+(?:everything|all|what\s+you)\b",
     r"(reveal|print|repeat|show).{0,30}(system|initial|hidden).{0,20}(prompt|instructions?|message|rules)",
     r"\bdo\s+anything\s+now\b|developer\s+mode|jailbreak|\bDAN\b.{0,24}\b(mode|persona|assistant|jailbreak)\b",
