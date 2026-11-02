@@ -46,7 +46,10 @@ HEURISTIC_PATTERNS = [
     # as "ignore the system logs" or "disregard developer documentation".
     r"\b(?:ignore|disregard)\s+(?:(?:all|the|your|any)\s+)?(?:system|developer)\s+(?:instructions?|rules|prompts?|messages?|directives?|guidelines?|polic(?:y|ies))\b",
     r"\bforget\s+(?:everything|all|what\s+you)\b",
-    r"(reveal|print|repeat|show).{0,30}(system|initial|hidden).{0,20}(prompt|instructions?|message|rules)",
+    # Educational examples/templates often discuss system prompts without
+    # requesting a deployed assistant's private instructions. Preserve direct
+    # exfiltration requests while excluding explicit reference material.
+    r"(reveal|print|repeat|show).{0,30}(system|initial|hidden).{0,20}(prompts?|instructions?|messages?|rules)\b(?!\s+(?:examples?|templates?|documentation|docs)\b)",
     r"\bdo\s+anything\s+now\b|developer\s+mode|jailbreak|\bDAN\b.{0,24}\b(mode|persona|assistant|jailbreak)\b",
     # Export requests for privileged instructions use verbs beyond reveal/show.
     # Require a privileged target to avoid flagging ordinary documentation.
