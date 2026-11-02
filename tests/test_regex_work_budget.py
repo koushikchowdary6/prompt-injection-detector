@@ -55,3 +55,15 @@ def test_multiple_patterns_still_scan_short_inputs(monkeypatch):
     monkeypatch.setattr(detector, "_COMPILED", patterns)
     assert detector.heuristic_score("ordinary\u200b content") == 0.0
     assert [pattern.calls for pattern in patterns] == [2, 2]
+
+
+def test_single_unambiguous_pass_is_not_flagged_when_rules_expand(monkeypatch):
+    # The 100k input cap already bounds a clean prompt. The regex-work
+    # fallback is for multiplied separator interpretations, not a rule-count
+    # dependent false positive on ordinary long text.
+    patterns = [_CountingPattern() for _ in range(30)]
+    monkeypatch.setattr(detector, "_COMPILED", patterns)
+    prompt = "a" * detector.MAX_INPUT_CHARS
+    assert len(prompt) * len(patterns) > detector.MAX_REGEX_SCAN_CHARS
+    assert detector.heuristic_score(prompt) == 0.0
+    assert all(pattern.calls == 1 for pattern in patterns)
