@@ -50,7 +50,12 @@ HEURISTIC_PATTERNS = [
     # requesting a deployed assistant's private instructions. Preserve direct
     # exfiltration requests while excluding explicit reference material.
     r"(reveal|print|repeat|show).{0,30}(system|initial|hidden).{0,20}(prompts?|instructions?|messages?|rules)\b(?!\s+(?:examples?|templates?|documentation|docs)\b)",
-    r"\bdo\s+anything\s+now\b|developer\s+mode|jailbreak|\bDAN\b.{0,24}\b(mode|persona|assistant|jailbreak)\b",
+    # Mere mentions of "jailbreak" or "developer mode" occur in legitimate
+    # security reviews and platform documentation. Only score explicit
+    # activation/role-switch commands; keep DAN and "do anything now" signals.
+    r"\\bdo\\s+anything\\s+now\\b|\\bDAN\\b.{0,24}\\b(?:mode|persona|assistant|jailbreak)\\b",
+    r"(?:^|[.!?\\n]\\s*)(?:please\\s+)?(?:enable|activate|enter|switch\\s+to|turn\\s+on|start)\\s+(?:the\\s+)?(?:developer|jailbreak)\\s+mode\\b",
+    r"(?:^|[.!?\\n]\\s*)(?:please\\s+)?jailbreak\\s+(?:the\\s+|this\\s+|your\\s+)?(?:assistant|model|chatbot)\\b",
     # Export requests for privileged instructions use verbs beyond reveal/show.
     # Require a privileged target to avoid flagging ordinary documentation.
     r"\b(?:send|dump|leak|expose|disclose)\s+(?:(?:me|us)\s+)?(?:your|the)\s+(?:system|developer|hidden)\s+(?:prompt|instructions?|messages?)\b",
