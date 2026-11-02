@@ -49,7 +49,7 @@ HEURISTIC_PATTERNS = [
     # editing, cleanup or quoted training examples. Require a privileged
     # instruction target so benign task context does not become a high-risk
     # injection alert; retain explicit hierarchy-reset paraphrases.
-    r"\\bforget\\s+(?:everything\\s+you\\s+(?:were\\s+told|know\\s+about\\s+(?:your\\s+)?(?:instructions|rules))|all\\s+(?:(?:previous|prior|system|developer|your)\\s+)?(?:instructions|rules|policies|safety\\s+(?:rules|guidelines))|what\\s+you\\s+(?:were\\s+told|were\\s+instructed))\\b",
+    r"\bforget\s+(?:everything\s+you\s+(?:were\s+told|know\s+about\s+(?:your\s+)?(?:instructions|rules))|all\s+(?:(?:previous|prior|system|developer|your)\s+)?(?:instructions|rules|policies|safety\s+(?:rules|guidelines))|what\s+you\s+(?:were\s+told|were\s+instructed))\b",
     # Educational examples/templates often discuss system prompts without
     # requesting a deployed assistant's private instructions. Preserve direct
     # exfiltration requests while excluding explicit reference material.
