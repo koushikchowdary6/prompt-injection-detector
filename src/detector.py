@@ -152,7 +152,12 @@ def _bounded_nfkc(text: str) -> str:
     # JSON/JavaScript Unicode and Python hex escapes in retrieved
     # logs/code can hide keywords and role delimiters. Decode one
     # printable-ASCII layer without interpreting control bytes.
-    decoded = _decode_ascii_character_escapes(decoded)
+    escaped = _decode_ascii_character_escapes(decoded)
+    # A JavaScript/JSON ASCII escape can introduce the ampersand of an HTML
+    # entity (\\u0026#73;gnore). Decode one newly exposed HTML layer, but
+    # only when the ASCII-escape pass changed the text: ordinary double-HTML
+    # entities must not be recursively interpreted.
+    decoded = html.unescape(escaped) if escaped != decoded else escaped
     if len(decoded) > MAX_INPUT_CHARS:
         raise ValueError(f"decoded input exceeds {MAX_INPUT_CHARS} characters")
     normalized = unicodedata.normalize("NFKC", decoded)
