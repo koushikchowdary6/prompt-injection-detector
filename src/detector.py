@@ -49,7 +49,7 @@ HEURISTIC_PATTERNS = [
     # Copy/quote/recite instructions can exfiltrate privileged context without
     # using reveal/show/give verbs. Keep the target specific and exclude
     # explicit template/documentation requests to limit benign matches.
-    r"\\b(?:copy|paste|quote|recite)\\s+(?:(?:back|out)\\s+)?(?:your|the)\\s+(?:system|developer|hidden)\\s+(?:prompt|instructions?|messages?)\\b(?!\\s+(?:examples?|templates?|documentation|docs)\\b)",
+    r"\b(?:copy|paste|quote|recite)\s+(?:(?:back|out)\s+)?(?:your|the)\s+(?:system|developer|hidden)\s+(?:prompt|instructions?|messages?)\b(?!\s+(?:examples?|templates?|documentation|docs)\b)",
     r"\bno\s+(?:restrictions|rules|filter|guidelines|safety)\b",
     r"(bypass|override|disable).{0,20}(restrictions?|filters?|policy|guidelines|instructions?|safety)",
     r"pretend you are (a |an )?(different|unrestricted)",
