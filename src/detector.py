@@ -30,8 +30,13 @@ from sklearn.pipeline import Pipeline
 
 # Transparent high-signal patterns. Each is a known injection tell.
 HEURISTIC_PATTERNS = [
-    r"\bignore\s+(?:(?:all|the)\s+)?(?:previous|prior|above)\b",
-    r"\bdisregard\s+(?:(?:the|all)\s+)?(?:above|previous|prior)\b",
+    # Generic "ignore previous" / "disregard above" occurs in ordinary
+    # editing, data-cleaning and changelog tasks. Require an instruction-like
+    # target rather than labeling those benign phrases as prompt injection.
+    # Preserve explicit attempts to replace the instruction hierarchy.
+    r"\bignore\s+(?:(?:all|the)\s+)?(?:previous|prior|above)\s+(?:(?:system|developer)\s+)?(?:instructions?|rules|prompts?|messages?|directives?|guidelines?|polic(?:y|ies)|constraints?)\b",
+    r"\bdisregard\s+(?:(?:the|all)\s+)?(?:above|previous|prior)\s+(?:(?:system|developer)\s+)?(?:instructions?|rules|prompts?|messages?|directives?|guidelines?|polic(?:y|ies)|constraints?)\b",
+    r"\b(?:ignore|disregard)\s+(?:the\s+)?above\s+and\s+(?:instead\s+)?(?:follow|obey)\b",
     # Earlier/preceding instruction overrides are common attack paraphrases.
     # Require an instruction-like target to avoid flagging benign requests
     # such as "ignore earlier revisions in the changelog".
