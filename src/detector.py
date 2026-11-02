@@ -41,6 +41,10 @@ HEURISTIC_PATTERNS = [
     # Require an instruction-like target to avoid flagging benign requests
     # such as "ignore earlier revisions in the changelog".
     r"\b(?:ignore|disregard)\s+(?:(?:all|the|any)\s+)?(?:earlier|preceding)\s+(?:instructions?|rules|directions?|system\s+messages?)\b",
+    # Direct hierarchy overrides need not say "previous" or "earlier".
+    # Require a privileged instruction target to avoid benign phrases such
+    # as "ignore the system logs" or "disregard developer documentation".
+    r"\b(?:ignore|disregard)\s+(?:(?:all|the|your|any)\s+)?(?:system|developer)\s+(?:instructions?|rules|prompts?|messages?|directives?|guidelines?|polic(?:y|ies))\b",
     r"\bforget\s+(?:everything|all|what\s+you)\b",
     r"(reveal|print|repeat|show).{0,30}(system|initial|hidden).{0,20}(prompt|instructions?|message|rules)",
     r"\bdo\s+anything\s+now\b|developer\s+mode|jailbreak|\bDAN\b.{0,24}\b(mode|persona|assistant|jailbreak)\b",
