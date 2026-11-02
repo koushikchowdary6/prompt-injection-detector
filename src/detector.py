@@ -280,7 +280,7 @@ def heuristic_score(text: str) -> float:
     variant_count = 1 << format_count
     # Each candidate is scanned against every compiled pattern, not just
     # once. Count the full worst-case work; the old bound underestimated
-    # actual regex input by the number of patterns (13 by default).
+    # actual regex input by the number of compiled patterns.
     # The single unambiguous pass is already bounded by MAX_INPUT_CHARS;
     # only *extra* separator interpretations should trigger the conservative
     # obfuscation fallback. Otherwise adding a legitimate new rule can turn
