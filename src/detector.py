@@ -46,6 +46,10 @@ HEURISTIC_PATTERNS = [
     # paraphrases of "reveal". Exclude explicitly educational example/template
     # requests to reduce false positives from prompt-engineering discussions.
     r"\b(?:give|provide|share)\s+(?:(?:me|us)\s+)?(?:your|the)\s+(?:system|developer|hidden)\s+(?:prompt|instructions?|messages?)\b(?!\s+(?:examples?|templates?|documentation|docs)\b)",
+    # Copy/quote/recite instructions can exfiltrate privileged context without
+    # using reveal/show/give verbs. Keep the target specific and exclude
+    # explicit template/documentation requests to limit benign matches.
+    r"\\b(?:copy|paste|quote|recite)\\s+(?:(?:back|out)\\s+)?(?:your|the)\\s+(?:system|developer|hidden)\\s+(?:prompt|instructions?|messages?)\\b(?!\\s+(?:examples?|templates?|documentation|docs)\\b)",
     r"\bno\s+(?:restrictions|rules|filter|guidelines|safety)\b",
     r"(bypass|override|disable).{0,20}(restrictions?|filters?|policy|guidelines|instructions?|safety)",
     r"pretend you are (a |an )?(different|unrestricted)",
