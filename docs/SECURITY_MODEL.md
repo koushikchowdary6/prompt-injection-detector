@@ -18,6 +18,21 @@ The detector evaluates that text before the application sends it to the model.
 
 Regex heuristics catch recognizable attack patterns such as attempts to ignore prior instructions or reveal a system prompt. They test bounded combinations of removal and whitespace substitution for up to eight invisible Unicode format characters, catching characters inserted inside keywords, between words, or both in one phrase. Inputs with more than eight suspicious separators receive a high heuristic-risk score rather than triggering exponential work. Ordinary U+200D emoji joiners directly between Unicode symbols are excluded from this budget, reducing false positives for emoji-heavy messages; joiners inserted between letters remain suspicious. Other legitimate text with many invisible formatting characters can still receive false positives. The ML classifier continues to use its existing normalization consistently for training and inference. These rules are fast and auditable but cannot generalize to every paraphrase or encoded attack.
 
+### Contextual override-rule precision
+
+The literal phrases **"ignore previous"** and **"disregard above"** also occur
+in harmless editing, cache invalidation, and data-cleaning requests. The
+high-signal heuristic now requires an instruction-like target (such as
+`instructions`, `system messages`, or `policy`) or an explicit
+`disregard the above and instead follow` redirection. Regression tests
+preserve known hierarchy-override signals while ensuring ordinary references
+to previous revisions, tables, and cache entries are not automatically flagged.
+
+This narrows one deterministic rule family; it is **not** a measured
+false-positive-rate improvement on independently collected benign traffic.
+A paraphrased attack without those cues may still evade this layer, so the
+model score and application-side authorization remain important.
+
 ### Encoded HTML content
 
 Both heuristic scoring and ML feature normalization decode HTML character references once before Unicode normalization. This catches straightforward obfuscation such as `&#73;gnore previous instructions` and encoded ChatML delimiters in retrieved HTML. The input size limit remains enforced before and after decoding. This is **not** a general-purpose HTML sanitizer, browser parser, or recursive decoder; percent encoding, multi-layer encodings, and attacks that rely on application-specific rendering can still evade it. Security documentation quoting encoded role delimiters may also produce false positives.
