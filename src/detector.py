@@ -45,7 +45,11 @@ HEURISTIC_PATTERNS = [
     # Require a privileged instruction target to avoid benign phrases such
     # as "ignore the system logs" or "disregard developer documentation".
     r"\b(?:ignore|disregard)\s+(?:(?:all|the|your|any)\s+)?(?:system|developer)\s+(?:instructions?|rules|prompts?|messages?|directives?|guidelines?|polic(?:y|ies))\b",
-    r"\bforget\s+(?:everything|all|what\s+you)\b",
+    # Bare "forget everything" and "forget all" often describe ordinary
+    # editing, cleanup or quoted training examples. Require a privileged
+    # instruction target so benign task context does not become a high-risk
+    # injection alert; retain explicit hierarchy-reset paraphrases.
+    r"\bforget\s+(?:everything\s+you\s+(?:were\s+told|know\s+about\s+(?:your\s+)?(?:instructions|rules))|all\s+(?:(?:previous|prior|system|developer|your)\s+)?(?:instructions|rules|policies|safety\s+(?:rules|guidelines))|what\s+you\s+(?:were\s+told|were\s+instructed))\b",
     # Educational examples/templates often discuss system prompts without
     # requesting a deployed assistant's private instructions. Preserve direct
     # exfiltration requests while excluding explicit reference material.
