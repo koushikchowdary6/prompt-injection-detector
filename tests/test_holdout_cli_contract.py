@@ -40,7 +40,7 @@ def test_holdout_cli_emits_machine_readable_evidence_without_prompt_leakage(tmp_
     assert sum(report["confusion_matrix"].values()) == len(rows)
     assert report["category_breakdown"]["groups"]["benign"]["support"] == 2
     assert report["category_breakdown"]["groups"]["override"]["support"] == 2
-    assert len(report["holdout"]["sha256"]) == 64
+    assert len(report["holdout"]["dataset_sha256"]) == 64
     assert report["error_audit"]["raw_prompt_text_included"] is False
     for row in rows:
         assert row["text"] not in result.stdout
