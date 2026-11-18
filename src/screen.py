@@ -33,7 +33,15 @@ def _reject_constant(value):
 
 def screen_lines(lines, threshold: float, max_records: int | None = None):
     detector = PromptInjectionDetector(ml_weight=0.0)
-    for index, line in enumerate(lines, start=1):
+    # Bound each read before parsing: iterating over stdin lines can allocate an
+    # arbitrarily large attacker-controlled line before the size check runs.
+    # readline(size) is supported by standard text streams (including sys.stdin).
+    index = 0
+    while True:
+        line = lines.readline(400_001)
+        if not line:
+            break
+        index += 1
         if max_records is not None and index > max_records:
             raise ValueError(f"line {index}: batch exceeds --max-records limit")
         if len(line) > 400_000:
