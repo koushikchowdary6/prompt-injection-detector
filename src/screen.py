@@ -31,9 +31,11 @@ def _reject_constant(value):
     raise ValueError("non-finite JSON numeric constant")
 
 
-def screen_lines(lines, threshold: float):
+def screen_lines(lines, threshold: float, max_records: int | None = None):
     detector = PromptInjectionDetector(ml_weight=0.0)
     for index, line in enumerate(lines, start=1):
+        if max_records is not None and index > max_records:
+            raise ValueError(f"line {index}: batch exceeds --max-records limit")
         if len(line) > 400_000:
             raise ValueError(f"line {index}: input record exceeds 400000 characters")
         try:
@@ -52,9 +54,13 @@ def screen_lines(lines, threshold: float):
 def main(argv=None, stdin=None, stdout=None, stderr=None):
     parser = argparse.ArgumentParser(description="Screen JSONL prompts offline without echoing input")
     parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument("--max-records", type=int, default=None,
+                        help="Optional positive cap on JSONL records; reject oversized batches atomically")
     args = parser.parse_args(argv)
     if not math.isfinite(args.threshold) or not 0 <= args.threshold <= 1:
         parser.error("--threshold must be a finite number between 0 and 1")
+    if args.max_records is not None and args.max_records < 1:
+        parser.error("--max-records must be a positive integer")
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
@@ -62,7 +68,7 @@ def main(argv=None, stdin=None, stdout=None, stderr=None):
         # Stage decisions before emitting anything: an invalid later record must
         # not leave earlier results looking like a successful partial batch.
         with tempfile.SpooledTemporaryFile(mode="w+t", max_size=1024 * 1024, encoding="utf-8") as staged:
-            for row in screen_lines(stdin, args.threshold):
+            for row in screen_lines(stdin, args.threshold, args.max_records):
                 staged.write(json.dumps(row, allow_nan=False) + "\n")
             staged.seek(0)
             for chunk in iter(lambda: staged.read(65536), ""):
