@@ -11,6 +11,7 @@ import argparse
 import json
 import math
 import sys
+import tempfile
 
 from detector import PromptInjectionDetector
 
@@ -43,8 +44,14 @@ def main(argv=None, stdin=None, stdout=None, stderr=None):
     stdout = sys.stdout if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
     try:
-        for row in screen_lines(stdin, args.threshold):
-            stdout.write(json.dumps(row, allow_nan=False) + "\n")
+        # Stage decisions before emitting anything: an invalid later record must
+        # not leave earlier results looking like a successful partial batch.
+        with tempfile.SpooledTemporaryFile(mode="w+t", max_size=1024 * 1024, encoding="utf-8") as staged:
+            for row in screen_lines(stdin, args.threshold):
+                staged.write(json.dumps(row, allow_nan=False) + "\n")
+            staged.seek(0)
+            for chunk in iter(lambda: staged.read(65536), ""):
+                stdout.write(chunk)
     except ValueError as exc:
         print(f"screening error: {exc}", file=stderr)
         return 2
