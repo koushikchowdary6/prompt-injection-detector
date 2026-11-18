@@ -121,6 +121,12 @@ output from a failed batch as a clean screening result. This offline command
 uses **heuristics only**, not the trained ML classifier, and is a demonstration
 of a pre-model screening integration rather than a security guarantee.
 
+For untrusted or potentially unbounded JSONL streams, add `--max-records 1000`
+(or a limit appropriate to your service). Exceeding the cap returns exit code 2
+without emitting any screening decisions, even if earlier records were valid.
+This bounds the number of processed records; it is not a total byte, time, or
+disk-usage limit. Validate resource limits separately for production use.
+
 ## Grouped-CV decision-threshold sweep
 
 Compare the operational false-alarm versus missed-attack tradeoff without
