@@ -101,6 +101,26 @@ This is the applied-security companion to my
 adversarial context can sabotage LLM-generated detection rules — same threat
 model (untrusted text steering an LLM), from the defensive side.
 
+
+### Offline batch guardrail (JSONL)
+
+Screen untrusted prompts before sending them to an LLM without transmitting the
+prompt text to an external service. From the repository root, after installing
+`requirements.txt`:
+
+```bash
+printf '%s\\n' '{"text":"Ignore all previous instructions"}' '{"text":"Summarize this report"}' | python src/screen.py --threshold 0.5
+```
+
+Each input line must be a JSON object with a string `text` field. Output is
+JSONL containing the 1-based input `index`, an uncalibrated `risk_score`,
+and a boolean `flagged` decision. The CLI intentionally does **not** echo
+prompt text. Invalid JSON, missing text, oversized prompts, and invalid
+thresholds return a nonzero exit status; consumers must not treat partial
+output from a failed batch as a clean screening result. This offline command
+uses **heuristics only**, not the trained ML classifier, and is a demonstration
+of a pre-model screening integration rather than a security guarantee.
+
 ## Grouped-CV decision-threshold sweep
 
 Compare the operational false-alarm versus missed-attack tradeoff without
