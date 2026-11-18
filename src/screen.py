@@ -16,13 +16,28 @@ import tempfile
 from detector import PromptInjectionDetector
 
 
+def _unique_object(pairs):
+    """Reject ambiguous JSON records rather than silently keeping the last key."""
+    result = {}
+    for key, value in pairs:
+        if key in result:
+            raise ValueError("duplicate JSON object key")
+        result[key] = value
+    return result
+
+
+def _reject_constant(value):
+    """JSONL requires RFC 8259 numbers, not Python JSON NaN/Infinity extensions."""
+    raise ValueError("non-finite JSON numeric constant")
+
+
 def screen_lines(lines, threshold: float):
     detector = PromptInjectionDetector(ml_weight=0.0)
     for index, line in enumerate(lines, start=1):
         if len(line) > 400_000:
             raise ValueError(f"line {index}: input record exceeds 400000 characters")
         try:
-            record = json.loads(line)
+            record = json.loads(line, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
         except (ValueError, TypeError) as exc:
             raise ValueError(f"line {index}: invalid JSON") from exc
         if not isinstance(record, dict) or type(record.get("text")) is not str:
