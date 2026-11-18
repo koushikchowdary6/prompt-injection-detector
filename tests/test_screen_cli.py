@@ -55,3 +55,29 @@ def test_malformed_json_does_not_echo_payload():
 def test_empty_input_is_valid():
     result = run_cli("")
     assert result.returncode == 0 and result.stdout == ""
+
+
+def test_oversized_single_line_fails_without_partial_output_or_prompt_disclosure():
+    secret = "do-not-echo-this-secret"
+    data = json.dumps({"text": "normal request"}) + "\n"
+    data += json.dumps({"text": secret + "x" * 400_000}) + "\n"
+    result = run_cli(data)
+    assert result.returncode == 2
+    assert result.stdout == ""
+    assert "line 2" in result.stderr
+    assert "400000" in result.stderr
+    assert secret not in result.stderr
+
+
+def test_exact_boundary_record_is_not_split_into_multiple_records():
+    # The length guard counts the full JSONL line, including its newline.
+    prefix = '{"text":"'
+    suffix = '"}\n'
+    line = prefix + "a" * (400_000 - len(prefix) - len(suffix)) + suffix
+    assert len(line) == 400_000
+    result = run_cli(line)
+    assert result.returncode == 2 or result.returncode == 0
+    # A 400k-character JSON record is allowed by the CLI input bound, though
+    # the detector may reject its 100k-character prompt limit.
+    assert "line 2" not in result.stderr
+    assert result.stdout == "" if result.returncode else True
