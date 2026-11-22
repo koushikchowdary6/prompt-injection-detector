@@ -48,7 +48,10 @@ def screen_lines(lines, threshold: float, max_records: int | None = None):
             raise ValueError(f"line {index}: input record exceeds 400000 characters")
         try:
             record = json.loads(line, object_pairs_hook=_unique_object, parse_constant=_reject_constant)
-        except (ValueError, TypeError) as exc:
+        except (ValueError, TypeError, RecursionError) as exc:
+            # A deeply nested JSON record can exceed the parser's recursion
+            # limit before any schema validation runs. Fail closed without
+            # exposing a traceback or emitting partial screening decisions.
             raise ValueError(f"line {index}: invalid JSON") from exc
         if not isinstance(record, dict) or type(record.get("text")) is not str:
             raise ValueError(f"line {index}: expected object with string text")
