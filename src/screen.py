@@ -31,17 +31,21 @@ def _reject_constant(value):
     raise ValueError("non-finite JSON numeric constant")
 
 
-def screen_lines(lines, threshold: float, max_records: int | None = None):
+def screen_lines(lines, threshold: float, max_records: int | None = None, max_input_chars: int | None = None):
     detector = PromptInjectionDetector(ml_weight=0.0)
     # Bound each read before parsing: iterating over stdin lines can allocate an
     # arbitrarily large attacker-controlled line before the size check runs.
     # readline(size) is supported by standard text streams (including sys.stdin).
     index = 0
+    total_chars = 0
     while True:
         line = lines.readline(400_001)
         if not line:
             break
         index += 1
+        total_chars += len(line)
+        if max_input_chars is not None and total_chars > max_input_chars:
+            raise ValueError(f"line {index}: batch exceeds --max-input-chars limit")
         if max_records is not None and index > max_records:
             raise ValueError(f"line {index}: batch exceeds --max-records limit")
         if len(line) > 400_000:
@@ -67,11 +71,15 @@ def main(argv=None, stdin=None, stdout=None, stderr=None):
     parser.add_argument("--threshold", type=float, default=0.5)
     parser.add_argument("--max-records", type=int, default=None,
                         help="Optional positive cap on JSONL records; reject oversized batches atomically")
+    parser.add_argument("--max-input-chars", type=int, default=10_000_000,
+                        help="Positive cumulative character budget for the entire batch (default: 10000000)")
     args = parser.parse_args(argv)
     if not math.isfinite(args.threshold) or not 0 <= args.threshold <= 1:
         parser.error("--threshold must be a finite number between 0 and 1")
     if args.max_records is not None and args.max_records < 1:
         parser.error("--max-records must be a positive integer")
+    if args.max_input_chars < 1:
+        parser.error("--max-input-chars must be a positive integer")
     stdin = sys.stdin if stdin is None else stdin
     stdout = sys.stdout if stdout is None else stdout
     stderr = sys.stderr if stderr is None else stderr
@@ -79,7 +87,7 @@ def main(argv=None, stdin=None, stdout=None, stderr=None):
         # Stage decisions before emitting anything: an invalid later record must
         # not leave earlier results looking like a successful partial batch.
         with tempfile.SpooledTemporaryFile(mode="w+t", max_size=1024 * 1024, encoding="utf-8") as staged:
-            for row in screen_lines(stdin, args.threshold, args.max_records):
+            for row in screen_lines(stdin, args.threshold, args.max_records, args.max_input_chars):
                 staged.write(json.dumps(row, allow_nan=False) + "\n")
             staged.seek(0)
             for chunk in iter(lambda: staged.read(65536), ""):
