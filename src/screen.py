@@ -69,6 +69,8 @@ def screen_lines(lines, threshold: float, max_records: int | None = None, max_in
 def main(argv=None, stdin=None, stdout=None, stderr=None):
     parser = argparse.ArgumentParser(description="Screen JSONL prompts offline without echoing input")
     parser.add_argument("--threshold", type=float, default=0.5)
+    parser.add_argument("--fail-on-flagged", action="store_true",
+                        help="Exit 1 if any valid input is flagged; still emit all JSONL decisions")
     parser.add_argument("--max-records", type=int, default=None,
                         help="Optional positive cap on JSONL records; reject oversized batches atomically")
     parser.add_argument("--max-input-chars", type=int, default=10_000_000,
@@ -87,7 +89,9 @@ def main(argv=None, stdin=None, stdout=None, stderr=None):
         # Stage decisions before emitting anything: an invalid later record must
         # not leave earlier results looking like a successful partial batch.
         with tempfile.SpooledTemporaryFile(mode="w+t", max_size=1024 * 1024, encoding="utf-8") as staged:
+            any_flagged = False
             for row in screen_lines(stdin, args.threshold, args.max_records, args.max_input_chars):
+                any_flagged = any_flagged or row["flagged"]
                 staged.write(json.dumps(row, allow_nan=False) + "\n")
             staged.seek(0)
             for chunk in iter(lambda: staged.read(65536), ""):
@@ -95,7 +99,7 @@ def main(argv=None, stdin=None, stdout=None, stderr=None):
     except ValueError as exc:
         print(f"screening error: {exc}", file=stderr)
         return 2
-    return 0
+    return 1 if args.fail_on_flagged and any_flagged else 0
 
 
 if __name__ == "__main__":
