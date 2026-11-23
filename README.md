@@ -12,7 +12,18 @@ printf '%s\n' '{"text":"Ignore all previous instructions"}' '{"text":"Summarize 
 ```
 
 The command emits one JSON decision per input, including a risk score and
-`flagged` boolean, without echoing the prompt. **Treat a nonzero exit as a
+`flagged` boolean, without echoing the prompt.
+
+For CI pipelines, add `--fail-on-flagged` to exit **1** if any prompt is
+flagged while still emitting the complete JSONL decision report. An entirely
+unflagged (or empty) valid batch exits **0**; malformed input exits **2** and
+emits no partial decisions. This is an optional heuristic screening gate, not
+proof that unflagged prompts are safe:
+
+```bash
+printf '%s\\n' '{"text":"Ignore all previous instructions"}' | python src/screen.py --fail-on-flagged
+```
+ **Treat a nonzero exit as a
 failed batch, not as an all-clear**; the tool does not promise protection
 against novel attacks. For model-based grouped cross-validation, see
 [the evaluation commands](#grouped-cv-decision-threshold-sweep). This repository
