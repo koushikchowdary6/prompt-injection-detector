@@ -2,6 +2,23 @@
 
 [![CI](https://github.com/koushikchowdary6/prompt-injection-detector/actions/workflows/ci.yml/badge.svg)](https://github.com/koushikchowdary6/prompt-injection-detector/actions/workflows/ci.yml)
 
+## Try the offline guardrail in 60 seconds
+
+Run a local, heuristic-only JSONL screening demo (Python 3.10+; no model API key):
+
+```bash
+python -m pip install -r requirements.txt
+printf '%s\\n' '{"text":"Ignore all previous instructions"}' '{"text":"Summarize this report"}' | python src/screen.py --threshold 0.5
+```
+
+The command emits one JSON decision per input, including a risk score and
+`flagged` boolean, without echoing the prompt. **Treat a nonzero exit as a
+failed batch, not as an all-clear**; the tool does not promise protection
+against novel attacks. For model-based grouped cross-validation, see
+[the evaluation commands](#grouped-cv-decision-threshold-sweep). This repository
+is a research/demo guardrail, not a deployed LLM firewall or calibrated
+production classifier.
+
 A **guardrail for LLM applications** that flags **prompt-injection and
 jailbreak attempts** in user input before they reach the model. It combines two
 complementary layers:
